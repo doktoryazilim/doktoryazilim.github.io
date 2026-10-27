@@ -20,6 +20,10 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="diagnostic">
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
   :root{
@@ -352,6 +356,12 @@
   .login-box p{color:var(--muted); font-size:12.5px; margin-bottom:20px;}
   .err{color:var(--red); font-size:12px; margin-top:10px; min-height:14px;}
 
+  .sk-card{background:var(--surface); border:1px solid var(--line); border-radius:12px; overflow:hidden;}
+  .sk-img,.sk-line{background:linear-gradient(90deg,var(--surface2) 25%,var(--surface3) 50%,var(--surface2) 75%); background-size:200% 100%; animation:skShimmer 1.2s linear infinite;}
+  .sk-img{aspect-ratio:1/1; width:100%;}
+  .sk-line{height:11px; border-radius:6px; margin:12px 12px 0;}
+  .sk-line.s{width:45%;} .sk-line.m{width:75%; margin-bottom:14px;}
+  @keyframes skShimmer{0%{background-position:200% 0;} 100%{background-position:-200% 0;}}
   .empty{text-align:center; padding:60px 20px; color:var(--muted); font-size:14px;}
   .spin{width:34px; height:34px; border:3px solid var(--line); border-top-color:var(--amber); border-radius:50%; animation:sp .8s linear infinite;}
   @keyframes sp{to{transform:rotate(360deg);}}
@@ -382,8 +392,11 @@
     .search-box.compact{max-width:calc(100vw - 190px);}
     .row2{grid-template-columns:1fr;}
     .stat-grid{grid-template-columns:1fr 1fr;}
-    .admin-sidebar{position:fixed; left:-236px; top:0; bottom:0; z-index:50; transition:.2s;}
-    .admin-sidebar.open{left:0;}
+    .admin-sidebar{position:fixed; left:-236px; top:0; bottom:0; z-index:50; transition:left .2s, visibility .2s; overflow-x:hidden; overflow-y:auto; visibility:hidden;}
+    .admin-sidebar.open{left:0; visibility:visible;}
+    .admin-sidebar .logo{min-width:0; max-width:100%;}
+    .admin-sidebar .logo img{max-width:110px !important; max-height:32px !important; flex-shrink:1;}
+    .admin-sidebar .logo .disp{white-space:nowrap; flex-shrink:0;}
     .admin-hamb{display:flex;}
     .admin-topbar{padding:14px 16px;}
     .admin-topbar h2{font-size:15px;}
@@ -465,6 +478,7 @@ const firebaseAuthReadyPromise = new Promise(res=>{ resolveAuthReady = res; });
 try{
   if(firebaseConfig.apiKey && firebaseConfig.apiKey !== 'BURAYA_YAPISTIR' && firebaseConfig.apiKey){
     firebase.initializeApp(firebaseConfig);
+    try{ firebase.firestore().settings({experimentalAutoDetectLongPolling:true, merge:true}); }catch(e){ console.warn('Firestore ayarı uygulanamadı', e); }
     storeDocRef = firebase.firestore().collection('kdr_store').doc('main');
     heroDocRef = firebase.firestore().collection('kdr_store').doc('hero');
     promosDocRef = firebase.firestore().collection('kdr_store').doc('promos');
@@ -495,6 +509,7 @@ const CART_KEY = 'kdr-cart-v1';
 const ADMIN_PASS = 'doktor9315';
 let DATA = null;
 let CART = [];
+let CATALOG_LOADING = false; // önbellek yokken ilk veri gelene kadar iskelet kartları göster
 let VIEW = { page:'home', category:null, product:null, cartOpen:false, searchTerm:'', searchResults:null, searchOpen:false };
 let LIGHTBOX_IMG = null;
 function openLightbox(url){ LIGHTBOX_IMG = url; render(); }
@@ -995,17 +1010,20 @@ function init(){
   try{
     const cached = localStorage.getItem('kdr_shared_'+STORAGE_KEY);
     DATA = cached ? JSON.parse(cached) : defaultData();
-  }catch(e){ DATA = defaultData(); }
+    CATALOG_LOADING = !cached;
+  }catch(e){ DATA = defaultData(); CATALOG_LOADING = true; }
   normalizeData();
   try{
     const cartRaw = localStorage.getItem('kdr_local_'+CART_KEY);
     CART = cartRaw ? JSON.parse(cartRaw) : [];
   }catch(e){ CART = []; }
   render();
+  // Güvenlik: veri 15 sn içinde gelmezse iskelet sonsuza kadar kalmasın.
+  if(CATALOG_LOADING) setTimeout(function(){ if(CATALOG_LOADING){ CATALOG_LOADING=false; render(); } }, 15000);
   loadData();
 }
 async function loadData(){
-  const beforeJson = catalogComparable(DATA||{});
+  let beforeJson = catalogComparable(DATA||{});
   try{
     const res = await storageGet(STORAGE_KEY, true);
     if(res && res.value){
@@ -1025,6 +1043,7 @@ async function loadData(){
   }catch(e){ if(!DATA) DATA = defaultData(); }
   normalizeData();
   lastCatalogCompareJson = catalogComparable(DATA);
+  if(CATALOG_LOADING){ CATALOG_LOADING = false; render(); beforeJson = catalogComparable(DATA); }
   try{
     const cres = await storageGet(CART_KEY, false);
     CART = (cres && cres.value) ? JSON.parse(cres.value) : CART;
@@ -1413,6 +1432,10 @@ function productCard(prod){
   </div>`;
 }
 function grid(products){
+  if(CATALOG_LOADING){
+    const sk = '<div class="sk-card"><div class="sk-img"></div><div class="sk-line s"></div><div class="sk-line m"></div></div>';
+    return `<div class="grid">${sk.repeat(8)}</div>`;
+  }
   if(!products.length) return `<div class="empty">Bu bölümde henüz ürün yok.</div>`;
   return `<div class="grid">${products.map(productCard).join('')}</div>`;
 }
@@ -1503,7 +1526,7 @@ function footerHtml(){
     <div class="wrap">
       <div class="foot-grid">
         <div class="foot-col">
-          <h4 class="disp">${esc(DATA.siteName)}</h4>
+          <h4 class="disp">Forklift Diagnostic</h4>
           <p style="color:var(--amber); font-weight:600; font-size:12.5px;">Gökay Durmuş</p>
         </div>
         <div class="foot-col">
