@@ -433,7 +433,7 @@
   #fd-intro{position:fixed; inset:0; z-index:100000; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:34px; padding:24px; overflow:hidden;
     background:radial-gradient(ellipse 70% 60% at 50% 46%, #ffffff 0%, #f4f7fb 55%, #e6edf7 100%);
     animation:fdOut .4s ease 6s forwards;}
-  #fd-intro.go{animation:fdOut .5s cubic-bezier(.4,0,.2,1) 4.5s forwards;}
+  #fd-intro.go{animation:fdOut .5s cubic-bezier(.4,0,.2,1) 5s forwards;}
   #fd-intro .fd-grid{position:absolute; inset:0; opacity:0; background-image:linear-gradient(rgba(var(--amber-rgb),.09) 1px,transparent 1px),linear-gradient(90deg,rgba(var(--amber-rgb),.09) 1px,transparent 1px); background-size:48px 48px; -webkit-mask-image:radial-gradient(ellipse 60% 55% at 50% 48%,#000 0%,transparent 75%); mask-image:radial-gradient(ellipse 60% 55% at 50% 48%,#000 0%,transparent 75%);}
   #fd-intro .fd-glow{position:absolute; width:min(760px,120vw); height:min(760px,120vw); left:50%; top:46%; margin:calc(min(760px,120vw) / -2) 0 0 calc(min(760px,120vw) / -2); border-radius:50%; background:radial-gradient(circle,rgba(var(--amber-rgb),.16) 0%,rgba(var(--amber-rgb),0) 62%); opacity:0; transform:scale(.7);}
   #fd-intro .fd-stage{position:relative; z-index:1;}
@@ -446,12 +446,37 @@
 
   #fd-intro.go .fd-grid{animation:fdFade 1.2s ease .1s forwards;}
   #fd-intro.go .fd-glow{animation:fdGlow 1.6s cubic-bezier(.2,.7,.2,1) .1s forwards;}
-  #fd-intro.go .fd-logo{animation:fdWipe 1.5s cubic-bezier(.65,.05,.25,1) .35s forwards, fdLogoIn 1.1s ease .35s forwards;}
-  #fd-intro.go .fd-edge{animation:fdEdge 1.5s cubic-bezier(.65,.05,.25,1) .35s forwards;}
-  #fd-intro.go .fd-shine{animation:fdShine 1.3s ease 2.1s forwards;}
+  #fd-intro.go .fd-logo{animation:fdWipe 1.6s cubic-bezier(.65,.05,.25,1) .4s forwards, fdLogoIn 1.2s ease .4s forwards;}
+  #fd-intro.go .fd-edge{animation:fdEdge 1.6s cubic-bezier(.65,.05,.25,1) .4s forwards;}
+  #fd-intro.go .fd-shine{animation:fdShine 1.4s ease 2.4s forwards;}
   #fd-intro.go .fd-bar{animation:fdFade .4s ease .4s forwards;}
-  #fd-intro.go .fd-bar b{animation:fdBar 3.9s cubic-bezier(.5,.1,.3,1) .4s forwards;}
+  #fd-intro.go .fd-bar b{animation:fdBar 4.4s cubic-bezier(.5,.1,.3,1) .4s forwards;}
 
+
+  /* ===== DİL SEÇİCİ ===== */
+  .icon-btn.ico-lang{color:var(--steel);}
+  .icon-btn.ico-lang:hover{background:var(--steel); border-color:var(--steel); color:#fff;}
+  .lang-badge{position:absolute; bottom:-4px; right:-4px; font:700 9px/1 'Inter',Arial,sans-serif; letter-spacing:.02em; background:var(--amber); color:#fff; border-radius:8px; padding:3px 4px; min-width:16px; text-align:center;}
+  #fd-lang{position:fixed; inset:0; z-index:10050; display:none; align-items:center; justify-content:center; padding:16px; background:rgba(13,27,52,.55); backdrop-filter:blur(3px);}
+  #fd-lang.open{display:flex;}
+  #fd-lang .lg-card{width:min(560px,100%); max-height:min(640px,86vh); display:flex; flex-direction:column; background:#fff; border-radius:16px; box-shadow:0 24px 60px rgba(13,27,52,.35); overflow:hidden;}
+  #fd-lang .lg-head{display:flex; align-items:center; justify-content:space-between; padding:16px 18px 10px; font-family:'Oswald',Arial,sans-serif; font-weight:600; font-size:18px; letter-spacing:.04em; color:#0d1b34;}
+  #fd-lang .lg-x{background:none; border:0; font-size:20px; cursor:pointer; color:#5b6b85; width:34px; height:34px; border-radius:50%;}
+  #fd-lang .lg-x:hover{background:#eef2f9;}
+  #fd-lang .lg-search{margin:0 18px 10px; padding:11px 14px; border:1px solid var(--line,#dfe6f1); border-radius:10px; font-size:15px; outline:none; font-family:inherit;}
+  #fd-lang .lg-search:focus{border-color:var(--amber); box-shadow:0 0 0 3px rgba(var(--amber-rgb),.15);}
+  #fd-lang .lg-list{overflow:auto; padding:4px 12px 16px; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px;}
+  #fd-lang .lg-item{display:flex; align-items:center; justify-content:space-between; gap:8px; text-align:left; padding:10px 12px; border:1px solid var(--line,#e3e9f3); background:#fff; border-radius:10px; cursor:pointer; font-size:14.5px; color:#0d1b34; font-family:inherit;}
+  #fd-lang .lg-item small{color:#7b8aa3; font-size:11px; text-transform:uppercase; letter-spacing:.04em;}
+  #fd-lang .lg-item:hover{border-color:var(--amber); background:#f4f8ff;}
+  #fd-lang .lg-item.on{background:var(--amber); border-color:var(--amber); color:#fff;}
+  #fd-lang .lg-item.on small{color:#dbe7ff;}
+  #fd-lang .lg-empty{grid-column:1/-1; text-align:center; color:#7b8aa3; padding:22px 0; font-size:14px;}
+  @media (max-width:420px){ #fd-lang .lg-list{grid-template-columns:1fr;} }
+  /* Google Translate'in kendi arayüzünü gizle */
+  .goog-te-banner-frame, .goog-te-banner-frame.skiptranslate, #goog-gt-tt, .goog-te-balloon-frame, .goog-tooltip, .goog-tooltip:hover{display:none!important;}
+  .goog-text-highlight{background:none!important; box-shadow:none!important;}
+  body{top:0!important;}
   @keyframes fdFade{to{opacity:1}}
   @keyframes fdGlow{to{opacity:1; transform:scale(1)}}
   @keyframes fdWipe{to{clip-path:inset(-10% 0 -10% 0)}}
@@ -1756,6 +1781,10 @@ function headerHtml(){
           <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
         </button>
         `}
+        <button class="icon-btn ico-lang notranslate" translate="no" title="Dil / Language" onclick="openLangPicker()">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          <span class="lang-badge">${(typeof fdLangCode!=='undefined'?fdLangCode:'tr').toUpperCase().replace('ZH-','')}</span>
+        </button>
         <button class="icon-btn ico-user ${CUSTOMER?'active-acc':''}" title="${CUSTOMER?esc(CUSTOMER.name+' '+CUSTOMER.surname):'Giriş Yap / Kayıt Ol'}" onclick="openAccount()">
           <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
         </button>
@@ -2439,7 +2468,7 @@ function tryLogin(){
 function adminHtml(){
   if(!ADMIN.authed){
     return `
-    <div class="admin-shell">
+    <div class="admin-shell notranslate" translate="no">
       <div class="admin-main" style="width:100%;">
         <div class="admin-topbar">
           <div class="logo">${logoMarkup(36)}<span class="disp">Yönetim Paneli</span></div>
@@ -2458,7 +2487,7 @@ function adminHtml(){
     </div>`;
   }
   return `
-  <div class="admin-shell">
+  <div class="admin-shell notranslate" translate="no">
     <div class="admin-sidebar${ADMIN.sidebarOpen?' open':''}">
       <div class="logo">${logoMarkup(32)}<span class="disp" style="font-size:14px;">Yönetim</span></div>
       <div class="admin-nav">
@@ -3406,6 +3435,7 @@ if('serviceWorker' in navigator){
   el.addEventListener('animationend', function(e){ if(e.animationName === 'fdOut' || e.animationName === 'fdSkip') done(); });
   el.addEventListener('click', function(){ el.style.animation = 'fdSkip .3s ease forwards'; });
   setTimeout(done, 7000); // güvenlik: her durumda kaldır
+  try{ if(sessionStorage.getItem('fd_skip_intro') === '1'){ sessionStorage.removeItem('fd_skip_intro'); done(); return; } }catch(e){}
   var src = '';
   try { src = (DATA && DATA.logo && DATA.logo.image) ? DATA.logo.image : DEFAULT_LOGO_IMG; } catch(e){}
   if(!src){ done(); return; }
@@ -3421,6 +3451,127 @@ if('serviceWorker' in navigator){
   img.onerror = done;
   img.src = src;
   if(img.complete && img.naturalWidth) start();
+})();
+</script>
+<div id="google_translate_element" class="notranslate" translate="no" aria-hidden="true" style="position:absolute;left:-9999px;top:0;width:1px;height:1px;overflow:hidden"></div>
+<div id="fd-lang" class="notranslate" translate="no" onclick="if(event.target===this)closeLangPicker()">
+  <div class="lg-card" role="dialog" aria-modal="true" aria-label="Dil / Language">
+    <div class="lg-head"><span>Dil Seçin · Select language</span><button class="lg-x" onclick="closeLangPicker()" aria-label="Kapat">✕</button></div>
+    <input class="lg-search" id="fd-lang-q" type="text" placeholder="Ara / Search..." autocomplete="off" oninput="fdLangFilter(this.value)">
+    <div class="lg-list" id="fd-lang-list"></div>
+  </div>
+</div>
+<script>
+/* DİL SEÇİCİ — ziyaretçi siteyi 100'den fazla dilde görebilir (Google Translate altyapısı).
+   Türkçe seçiliyken hiçbir ek dosya yüklenmez; çeviri sadece başka dil seçilince/algılanınca yüklenir. */
+(function(){
+  var LANGS = [["tr", "Türkçe"], ["en", "English"], ["de", "Deutsch"], ["fr", "Français"], ["es", "Español"], ["it", "Italiano"], ["pt", "Português"], ["nl", "Nederlands"], ["ru", "Русский"], ["ar", "العربية"], ["az", "Azərbaycanca"], ["af", "Afrikaans"], ["sq", "Shqip"], ["am", "አማርኛ"], ["hy", "Հայերեն"], ["eu", "Euskara"], ["be", "Беларуская"], ["bn", "বাংলা"], ["bs", "Bosanski"], ["bg", "Български"], ["ca", "Català"], ["ceb", "Cebuano"], ["ny", "Chichewa"], ["zh-CN", "中文 (简体)"], ["zh-TW", "中文 (繁體)"], ["co", "Corsu"], ["hr", "Hrvatski"], ["cs", "Čeština"], ["da", "Dansk"], ["eo", "Esperanto"], ["et", "Eesti"], ["tl", "Filipino"], ["fi", "Suomi"], ["fy", "Frysk"], ["gl", "Galego"], ["ka", "ქართული"], ["el", "Ελληνικά"], ["gu", "ગુજરાતી"], ["ht", "Kreyòl ayisyen"], ["ha", "Hausa"], ["haw", "ʻŌlelo Hawaiʻi"], ["iw", "עברית"], ["hi", "हिन्दी"], ["hmn", "Hmong"], ["hu", "Magyar"], ["is", "Íslenska"], ["ig", "Igbo"], ["id", "Bahasa Indonesia"], ["ga", "Gaeilge"], ["ja", "日本語"], ["jw", "Basa Jawa"], ["kn", "ಕನ್ನಡ"], ["kk", "Қазақша"], ["km", "ខ្មែរ"], ["rw", "Kinyarwanda"], ["ko", "한국어"], ["ku", "Kurdî"], ["ky", "Кыргызча"], ["lo", "ລາວ"], ["la", "Latina"], ["lv", "Latviešu"], ["lt", "Lietuvių"], ["lb", "Lëtzebuergesch"], ["mk", "Македонски"], ["mg", "Malagasy"], ["ms", "Bahasa Melayu"], ["ml", "മലയാളം"], ["mt", "Malti"], ["mi", "Māori"], ["mr", "मराठी"], ["mn", "Монгол"], ["my", "မြန်မာ"], ["ne", "नेपाली"], ["no", "Norsk"], ["or", "ଓଡ଼ିଆ"], ["ps", "پښتو"], ["fa", "فارسی"], ["pl", "Polski"], ["pa", "ਪੰਜਾਬੀ"], ["ro", "Română"], ["sm", "Gagana Samoa"], ["gd", "Gàidhlig"], ["sr", "Српски"], ["st", "Sesotho"], ["sn", "Shona"], ["sd", "سنڌي"], ["si", "සිංහල"], ["sk", "Slovenčina"], ["sl", "Slovenščina"], ["so", "Soomaali"], ["su", "Basa Sunda"], ["sw", "Kiswahili"], ["sv", "Svenska"], ["tg", "Тоҷикӣ"], ["ta", "தமிழ்"], ["tt", "Татарча"], ["te", "తెలుగు"], ["th", "ไทย"], ["tk", "Türkmençe"], ["uk", "Українська"], ["ur", "اردو"], ["ug", "ئۇيغۇرچە"], ["uz", "Oʻzbekcha"], ["vi", "Tiếng Việt"], ["cy", "Cymraeg"], ["xh", "isiXhosa"], ["yi", "ייִדיש"], ["yo", "Yorùbá"], ["zu", "isiZulu"]];
+  var PAGE = 'tr', KEY = 'fd_lang', SEEN = 'fd_lang_seen';
+  var AUTO_DETECT = true; // ilk ziyarette tarayıcı dili Türkçe değilse otomatik çevir (kapatmak için false)
+  var codes = LANGS.map(function(l){ return l[0]; });
+  function ls(k, v){ try{ if(v === undefined) return localStorage.getItem(k); if(v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); }catch(e){} return null; }
+  function normalize(nav){
+    if(!nav) return null; nav = String(nav).toLowerCase();
+    if(nav.indexOf('zh') === 0) return (/tw|hk|mo|hant/.test(nav)) ? 'zh-TW' : 'zh-CN';
+    var base = nav.split('-')[0];
+    var map = { he:'iw', jv:'jw', nb:'no', nn:'no', fil:'tl' };
+    base = map[base] || base;
+    return codes.indexOf(base) >= 0 ? base : null;
+  }
+  window.fdLangCode = ls(KEY) || PAGE;
+  var gtLoading = false, gtReady = false, queue = [];
+  function setBadge(){
+    var t = (window.fdLangCode || PAGE).toUpperCase().replace('ZH-','');
+    Array.prototype.forEach.call(document.querySelectorAll('.lang-badge'), function(b){ b.textContent = t; });
+    document.documentElement.setAttribute('lang', window.fdLangCode === 'zh-CN' ? 'zh-Hans' : (window.fdLangCode === 'zh-TW' ? 'zh-Hant' : window.fdLangCode));
+  }
+  function findCombo(){ return document.querySelector('select.goog-te-combo'); }
+  function waitCombo(cb, tries){
+    var c = findCombo();
+    if(c){ gtReady = true; cb(c); return; }
+    if(tries > 150) return; // ~15 sn sonra vazgeç
+    setTimeout(function(){ waitCombo(cb, (tries||0) + 1); }, 100);
+  }
+  function loadGT(){
+    if(gtLoading) return; gtLoading = true;
+    window.googleTranslateElementInit = function(){
+      try{
+        new google.translate.TranslateElement({
+          pageLanguage: PAGE,
+          includedLanguages: codes.filter(function(c){ return c !== PAGE; }).join(','),
+          autoDisplay: false
+        }, 'google_translate_element');
+      }catch(e){ console.warn('Çeviri başlatılamadı', e); }
+      waitCombo(function(c){ var q = queue.slice(); queue = []; q.forEach(function(code){ applyCombo(c, code); }); }, 0);
+    };
+    var sc = document.createElement('script');
+    sc.src = 'https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit';
+    sc.async = true;
+    sc.onerror = function(){ gtLoading = false; console.warn('Google Translate yüklenemedi'); };
+    document.head.appendChild(sc);
+  }
+  function applyCombo(c, code){ c.value = code; c.dispatchEvent(new Event('change')); }
+  function clearCookies(){
+    var past = 'expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    var host = location.hostname, parts = host.split('.'), doms = [host];
+    if(parts.length > 1) doms.push('.' + parts.slice(-2).join('.'));
+    document.cookie = 'googtrans=; ' + past + '; path=/';
+    doms.forEach(function(d){ document.cookie = 'googtrans=; ' + past + '; path=/; domain=' + d; });
+  }
+  function translateTo(code){
+    var c = findCombo();
+    if(c) applyCombo(c, code);
+    else { queue = [code]; loadGT(); }
+  }
+  window.setSiteLang = function(code){
+    if(codes.indexOf(code) < 0) return;
+    var wasTranslated = (window.fdLangCode !== PAGE);
+    window.fdLangCode = code; ls(KEY, code); ls(SEEN, '1'); setBadge(); closeLangPicker();
+    if(code === PAGE){
+      if(wasTranslated || gtReady){
+        clearCookies();
+        try{ sessionStorage.setItem('fd_skip_intro', '1'); }catch(e){}
+        location.reload(); // orijinal Türkçe içeriğe temiz dönüş
+      }
+      return;
+    }
+    translateTo(code);
+  };
+  var allItems = null;
+  function renderList(filter){
+    var q = (filter || '').toLowerCase().trim(), cur = window.fdLangCode || PAGE, html = '', n = 0;
+    LANGS.forEach(function(l){
+      if(q && l[1].toLowerCase().indexOf(q) < 0 && l[0].toLowerCase().indexOf(q) < 0) return;
+      n++;
+      html += '<button class="lg-item' + (l[0] === cur ? ' on' : '') + '" onclick="setSiteLang(\'' + l[0] + '\')"><span>' + l[1] + '</span><small>' + l[0].replace('zh-','zh ') + '</small></button>';
+    });
+    if(!n) html = '<div class="lg-empty">Sonuç yok / No results</div>';
+    document.getElementById('fd-lang-list').innerHTML = html;
+  }
+  window.fdLangFilter = renderList;
+  window.openLangPicker = function(){
+    var m = document.getElementById('fd-lang'); if(!m) return;
+    renderList(''); var q = document.getElementById('fd-lang-q'); q.value = '';
+    m.classList.add('open');
+    if(!/Mobi|Android/i.test(navigator.userAgent)) setTimeout(function(){ q.focus(); }, 30);
+  };
+  window.closeLangPicker = function(){ var m = document.getElementById('fd-lang'); if(m) m.classList.remove('open'); };
+  document.addEventListener('keydown', function(e){ if(e.key === 'Escape') closeLangPicker(); });
+
+  // Açılışta: kayıtlı dil varsa ya da ilk ziyarette tarayıcı dili farklıysa çevir
+  function boot(){
+    var saved = ls(KEY), target = null;
+    if(saved && saved !== PAGE) target = saved;
+    else if(!saved && AUTO_DETECT && !ls(SEEN)){
+      var d = normalize(navigator.language || (navigator.languages && navigator.languages[0]));
+      ls(SEEN, '1');
+      if(d && d !== PAGE){ target = d; window.fdLangCode = d; ls(KEY, d); }
+    }
+    setBadge();
+    if(target) translateTo(target);
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ setTimeout(boot, 200); });
+  else setTimeout(boot, 200);
 })();
 </script>
 </body>
