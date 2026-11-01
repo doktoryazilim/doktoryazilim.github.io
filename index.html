@@ -559,7 +559,7 @@ try{
     ordersColRef = firebase.firestore().collection('kdr_orders');
     productsColRef = firebase.firestore().collection('kdr_products');
     firebaseReady = true;
-    try{ const _st = firebase.storage(); try{ _st.setMaxUploadRetryTime(30000); _st.setMaxOperationRetryTime(15000); }catch(_e){} firebaseStorageRef = _st.ref(); }catch(e){ console.error('Firebase Storage başlatma hatası (Storage etkinleştirilmemiş olabilir):', e); }
+    try{ const _st = firebase.storage(); try{ _st.setMaxUploadRetryTime(12000); _st.setMaxOperationRetryTime(12000); }catch(_e){} firebaseStorageRef = _st.ref(); }catch(e){ console.error('Firebase Storage başlatma hatası (Storage etkinleştirilmemiş olabilir):', e); }
     firebase.auth().onAuthStateChanged(function(user){
       if(user){ resolveAuthReady(); }
       else{
@@ -911,6 +911,7 @@ async function storageGet(key, shared){
 async function storageSet(key, value, shared){
   let ok = false;
   let cloudError = null;
+  window.__lastSaveErr = null; window.__lastSaveLocalErr = null; // başarısızlık nedenini kullanıcıya gösterebilmek için
   try{
     if(window.storage && typeof window.storage.set==='function'){
       const r = await window.storage.set(key, value, shared);
@@ -984,12 +985,12 @@ async function storageSet(key, value, shared){
         await storeDocRef.set({ value: value, updatedAt: Date.now() });
       }
       ok = true;
-    }catch(e){ console.error('Firestore yazma hatası', e); cloudError = e; }
+    }catch(e){ console.error('Firestore yazma hatası', e); cloudError = e; window.__lastSaveErr = e; }
   }
   try{
     localStorage.setItem(CACHE_NS+(shared?'kdr_shared_':'kdr_local_')+key, value);
     ok = true;
-  }catch(e){ /* storage full or unavailable */ }
+  }catch(e){ /* storage full or unavailable */ window.__lastSaveLocalErr = e; }
   return ok ? {key, value, shared, cloudError} : null;
 }
 
@@ -1326,7 +1327,12 @@ async function saveData(){
   try{
     const json = JSON.stringify(DATA);
     const result = await storageSet(STORAGE_KEY, json, true);
-    if(!result){ showToast('Kaydetme başarısız oldu, tekrar deneyin'); }
+    if(!result){
+      const ce = window.__lastSaveErr, le = window.__lastSaveLocalErr;
+      showToast('Kaydetme başarısız oldu, tekrar deneyin.'
+        + (ce ? ' Bulut: ' + String(ce.code || ce.message || ce).slice(0,90) : '')
+        + (le ? ' | Tarayıcı belleği: ' + String(le.name || le.message || le).slice(0,40) : ''), 9000);
+    }
     else if(result.cloudError){
       // Yerelde kaydedildi ama buluta (Firestore'a) yazılamadı — bu durumda başka bir
       // cihaz/tarayıcı bu değişikliği GÖRMEZ, o yüzden kullanıcıyı açıkça uyarıyoruz
@@ -1428,11 +1434,11 @@ function catColor(id){ return CAT_COLORS[id] || '#eef1f5'; }
 function esc(s){ return (s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 function formatDate(iso){ const d=new Date(iso); return d.toLocaleDateString('tr-TR')+' '+d.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'}); }
 
-function showToast(msg){
+function showToast(msg, ms){
   const t = document.createElement('div');
   t.className='toast'; t.textContent=msg;
   document.body.appendChild(t);
-  setTimeout(()=>t.remove(), 2400);
+  setTimeout(()=>t.remove(), ms || 2400);
 }
 
 /* ---------- uygulama içi onay penceresi: tarayıcının native confirm()'i yerine ---------- */
@@ -2723,13 +2729,15 @@ async function saveProductImpl(editing){
   if(isDataUrl(image)){
     if(Date.now() < STORAGE_DOWN_UNTIL){
       // Storage kısa süre önce yanıt vermedi: bekletmeden doğrudan veritabanına gömülü kaydet
+      try{ image = await shrinkJpegDataUrl(image); }catch(_s){}
     } else {
       showToast('Fotoğraf yükleniyor...');
       try{ image = await uploadDataUrlToStorage(image, 'products', newId || editing); }
       catch(e){
         console.error('Storage yükleme hatası', e);
         STORAGE_DOWN_UNTIL = Date.now() + 45*1000;
-        showToast('Fotoğraf Storage\'a yüklenemedi, veritabanına gömülü kaydediliyor');
+        try{ image = await shrinkJpegDataUrl(image); }catch(_s){} // gömülecekse küçük olsun
+        showToast('Fotoğraf Storage\'a yüklenemedi, veritabanına gömülü kaydediliyor. Hata: ' + String((e && (e.code || e.message)) || e).slice(0,110), 7000);
       }
     }
   }
@@ -3167,16 +3175,26 @@ async function uploadDataUrlToStorage(dataUrl, folder, id){
   // Yavaş/kararsız bağlantıda tek deneme bazen zaman aşımına uğruyordu: geçici hatalarda 2 kez dene.
   // Yetki/kural hatalarında (kalıcı) tekrar denemenin anlamı yok.
   let lastErr;
-  for(let attempt = 0; attempt < 2; attempt++){
+  for(let attempt = 0; attempt < 3; attempt++){
+    if(attempt > 0) await new Promise(function(r){ setTimeout(r, 1500 * attempt); });
     try{ return await uploadDataUrlToStorageOnce(dataUrl, folder, id); }
     catch(e){
       lastErr = e;
+      console.warn('Storage yükleme denemesi başarısız (' + (attempt + 1) + '/3)', e);
       const code = String((e && e.code) || '');
       if(code === 'storage/unauthorized' || code === 'storage/unauthenticated' || code === 'storage/bucket-not-found' || code === 'storage/project-not-found') break;
       if(!firebaseReady || !firebaseStorageRef) break;
     }
   }
   throw lastErr;
+}
+function dataUrlToBlob(u){
+  const i = u.indexOf(','), head = u.slice(0, i), body = u.slice(i + 1);
+  const mime = (/^data:([^;,]+)/.exec(head) || [])[1] || 'image/jpeg';
+  const bin = /;base64/i.test(head) ? atob(body) : decodeURIComponent(body);
+  const arr = new Uint8Array(bin.length);
+  for(let k = 0; k < bin.length; k++) arr[k] = bin.charCodeAt(k);
+  return new Blob([arr], { type: mime });
 }
 async function uploadDataUrlToStorageOnce(dataUrl, folder, id){
   if(!firebaseReady || !firebaseStorageRef) throw new Error('Firebase Storage başlatılamadı');
@@ -3186,10 +3204,21 @@ async function uploadDataUrlToStorageOnce(dataUrl, folder, id){
   const ext = ({'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif','image/svg+xml':'svg'})[type] || 'jpg';
   const safeId = String(id).replace(/[^a-zA-Z0-9_-]/g,'-');
   const ref = firebaseStorageRef.child(folder + '/' + safeId + '-' + Date.now().toString(36) + '.' + ext);
-  const task = ref.putString(dataUrl, 'data_url', { contentType:type, cacheControl:'public,max-age=31536000' });
-  let snap;
-  try{ snap = await withTimeout(task, Math.min(25000, STORAGE_UPLOAD_TIMEOUT_MS + Math.round(dataUrl.length / 1024) * 10), 'Storage yanıt vermedi (etkin değil ya da kurallar yazmaya izin vermiyor olabilir)'); }
-  catch(e){ try{ task.cancel(); }catch(_){} throw e; }
+  const meta = { contentType:type, cacheControl:'public,max-age=31536000' };
+  // Blob olarak yükle (base64 string yüklemesinden daha kararlı, telefonlarda daha az bellek kullanır)
+  let blob = null;
+  try{ blob = dataUrlToBlob(dataUrl); }catch(_e){ blob = null; }
+  const task = blob ? ref.put(blob, meta) : ref.putString(dataUrl, 'data_url', meta);
+  // Toplam süre yerine "takılma" süresine bak: yavaş ama ilerleyen yükleme iptal edilmesin
+  const snap = await new Promise(function(resolve, reject){
+    let stall, total, finished = false;
+    function end(fn, v){ if(finished) return; finished = true; clearTimeout(stall); clearTimeout(total); fn(v); }
+    function fail(e){ try{ task.cancel(); }catch(_){} end(reject, e); }
+    function arm(){ clearTimeout(stall); stall = setTimeout(function(){ fail(new Error('Storage yanıt vermedi (etkin değil ya da kurallar yazmaya izin vermiyor olabilir)')); }, 20000); }
+    total = setTimeout(function(){ fail(new Error('Yükleme çok uzun sürdü')); }, 90000);
+    arm();
+    task.on('state_changed', arm, function(err){ end(reject, err); }, function(){ end(resolve, task.snapshot); });
+  });
   return await withTimeout(snap.ref.getDownloadURL(), 15000, 'Görsel adresi alınamadı');
 }
 // Base64 görseli (sadece JPEG fotoğrafları) ~120KB / 1100px'e indirir; PNG'lere dokunmaz (şeffaflık bozulmasın).
