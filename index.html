@@ -428,9 +428,52 @@
     .btn:active, .icon-btn:active, .card:active{transform:scale(.96); transition:transform .1s ease;}
     .card:active{transform:scale(.97);}
   }
+
+  /* ===== AÇILIŞ ANİMASYONU (logo) ===== */
+  #fd-intro{position:fixed; inset:0; z-index:100000; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:34px; padding:24px; overflow:hidden;
+    background:radial-gradient(ellipse 70% 60% at 50% 46%, #ffffff 0%, #f4f7fb 55%, #e6edf7 100%);
+    animation:fdOut .4s ease 6s forwards;}
+  #fd-intro.go{animation:fdOut .5s cubic-bezier(.4,0,.2,1) 4.5s forwards;}
+  #fd-intro .fd-grid{position:absolute; inset:0; opacity:0; background-image:linear-gradient(rgba(var(--amber-rgb),.09) 1px,transparent 1px),linear-gradient(90deg,rgba(var(--amber-rgb),.09) 1px,transparent 1px); background-size:48px 48px; -webkit-mask-image:radial-gradient(ellipse 60% 55% at 50% 48%,#000 0%,transparent 75%); mask-image:radial-gradient(ellipse 60% 55% at 50% 48%,#000 0%,transparent 75%);}
+  #fd-intro .fd-glow{position:absolute; width:min(760px,120vw); height:min(760px,120vw); left:50%; top:46%; margin:calc(min(760px,120vw) / -2) 0 0 calc(min(760px,120vw) / -2); border-radius:50%; background:radial-gradient(circle,rgba(var(--amber-rgb),.16) 0%,rgba(var(--amber-rgb),0) 62%); opacity:0; transform:scale(.7);}
+  #fd-intro .fd-stage{position:relative; z-index:1;}
+  #fd-intro .fd-logo{position:relative; display:block; opacity:0; clip-path:inset(-10% 100% -10% 0);}
+  #fd-intro .fd-logo img{display:block; width:min(560px,80vw); height:auto; max-height:34vh; object-fit:contain;}
+  #fd-intro .fd-shine{position:absolute; inset:0; background:linear-gradient(105deg,transparent 38%,rgba(255,255,255,.95) 50%,transparent 62%) no-repeat; background-size:260% 100%; background-position:130% 0; -webkit-mask-size:100% 100%; mask-size:100% 100%; -webkit-mask-repeat:no-repeat; mask-repeat:no-repeat; pointer-events:none;}
+  #fd-intro .fd-edge{position:absolute; top:-8%; bottom:-8%; left:0; width:2px; border-radius:2px; background:linear-gradient(to bottom,transparent,var(--amber),transparent); box-shadow:0 0 16px 3px rgba(var(--amber-rgb),.55); opacity:0;}
+  #fd-intro .fd-bar{position:relative; z-index:1; width:min(220px,56vw); height:3px; border-radius:3px; background:rgba(var(--amber-rgb),.14); overflow:hidden; opacity:0;}
+  #fd-intro .fd-bar b{display:block; height:100%; width:100%; border-radius:3px; background:linear-gradient(90deg,var(--amber),#5b9bff); transform:scaleX(0); transform-origin:left;}
+
+  #fd-intro.go .fd-grid{animation:fdFade 1.2s ease .1s forwards;}
+  #fd-intro.go .fd-glow{animation:fdGlow 1.6s cubic-bezier(.2,.7,.2,1) .1s forwards;}
+  #fd-intro.go .fd-logo{animation:fdWipe 1.5s cubic-bezier(.65,.05,.25,1) .35s forwards, fdLogoIn 1.1s ease .35s forwards;}
+  #fd-intro.go .fd-edge{animation:fdEdge 1.5s cubic-bezier(.65,.05,.25,1) .35s forwards;}
+  #fd-intro.go .fd-shine{animation:fdShine 1.3s ease 2.1s forwards;}
+  #fd-intro.go .fd-bar{animation:fdFade .4s ease .4s forwards;}
+  #fd-intro.go .fd-bar b{animation:fdBar 3.9s cubic-bezier(.5,.1,.3,1) .4s forwards;}
+
+  @keyframes fdFade{to{opacity:1}}
+  @keyframes fdGlow{to{opacity:1; transform:scale(1)}}
+  @keyframes fdWipe{to{clip-path:inset(-10% 0 -10% 0)}}
+  @keyframes fdLogoIn{from{opacity:0; transform:translateY(8px) scale(.97); filter:blur(6px)} to{opacity:1; transform:none; filter:blur(0)}}
+  @keyframes fdEdge{0%{left:0; opacity:0} 12%{opacity:1} 88%{opacity:1} 100%{left:100%; opacity:0}}
+  @keyframes fdShine{from{background-position:130% 0} to{background-position:-30% 0}}
+  @keyframes fdBar{to{transform:scaleX(1)}}
+  @keyframes fdOut{to{opacity:0; visibility:hidden; pointer-events:none; transform:scale(1.02)}}
+  @keyframes fdSkip{to{opacity:0; visibility:hidden; pointer-events:none}}
+  @media (prefers-reduced-motion:reduce){ #fd-intro{display:none} }
 </style>
 </head>
 <body>
+<div id="fd-intro" aria-hidden="true">
+  <div class="fd-grid"></div>
+  <div class="fd-glow"></div>
+  <div class="fd-stage">
+    <div class="fd-logo"><img id="fd-intro-img" alt=""><div class="fd-shine" id="fd-intro-shine"></div></div>
+    <div class="fd-edge"></div>
+  </div>
+  <div class="fd-bar"><b></b></div>
+</div>
 
 <div id="app"></div>
 
@@ -466,6 +509,12 @@ let categoriesDocRef = null;
 let firebaseStorageRef = null;
 let ordersColRef = null;
 let productsColRef = null;
+/* Bulutta (kdr_products) EN SON gördüğümüz ürün hâli: id -> JSON. Kayıt sırasında sadece
+   bu tarayıcıda DEĞİŞEN ürünleri yazar, sadece bu tarayıcıda SİLİNEN ürünleri siler.
+   Böylece eski (güncellenmemiş) bir sekme/cihaz/ziyaretçi kayıt yaptığında, başkasının
+   sildiği ürünleri geri getirmez ya da başkasının eklediği ürünleri silmez. */
+let PRODUCT_BASELINE = new Map();
+let PRODUCT_BASELINE_READY = false;
 /* Firestore güvenlik kuralları "request.auth != null" istiyor (yani sadece giriş
    yapmış kullanıcılar okuyup yazabiliyor). Sitede ayrı bir müşteri girişi olmadığı
    için her ziyaretçiyi arka planda GÖRÜNMEZ şekilde "anonim" olarak Firebase'e
@@ -486,7 +535,7 @@ try{
     ordersColRef = firebase.firestore().collection('kdr_orders');
     productsColRef = firebase.firestore().collection('kdr_products');
     firebaseReady = true;
-    try{ firebaseStorageRef = firebase.storage().ref(); }catch(e){ console.error('Firebase Storage başlatma hatası (Storage etkinleştirilmemiş olabilir):', e); }
+    try{ const _st = firebase.storage(); try{ _st.setMaxUploadRetryTime(8000); _st.setMaxOperationRetryTime(8000); }catch(_e){} firebaseStorageRef = _st.ref(); }catch(e){ console.error('Firebase Storage başlatma hatası (Storage etkinleştirilmemiş olabilir):', e); }
     firebase.auth().onAuthStateChanged(function(user){
       if(user){ resolveAuthReady(); }
       else{
@@ -505,6 +554,9 @@ try{
 
 <script>
 const STORAGE_KEY = 'kdr-store-data-v2';
+// Önbellek anahtarları Firebase projesine göre ayrılır: aynı adresten/bilgisayardan (ör. file://) açılan
+// farklı siteler birbirinin önbelleğini okuyup karışmasın.
+const CACHE_NS = ((typeof firebaseConfig !== 'undefined' && firebaseConfig && firebaseConfig.projectId) || 'local') + ':';
 const CART_KEY = 'kdr-cart-v1';
 const ADMIN_PASS = 'doktor9315';
 let DATA = null;
@@ -637,6 +689,7 @@ function handleFreshStoreSnapshot(fresh){
   if(!isTyping && !ADMIN.editingProduct){
     const keepOrders = DATA.orders; // siparişler kendi kanalından geliyor, burada korunur
     DATA = fresh;
+    PARTIAL_CATALOG = false;
     DATA.orders = keepOrders;
     normalizeData();
     render();
@@ -668,10 +721,18 @@ async function startOrderWatcher(){
     debounceTimer = setTimeout(refreshCatalogFromFirestore, 400);
   };
   const onErr = function(err){ console.error('Firestore dinleme hatası', err); };
-  const u1 = storeDocRef.onSnapshot(onAnyChange, onErr);
-  const u2 = heroDocRef.onSnapshot(onAnyChange, onErr);
-  const u3 = promosDocRef.onSnapshot(onAnyChange, onErr);
-  const u4 = categoriesDocRef.onSnapshot(onAnyChange, onErr);
+  // Her dinleyici bağlanır bağlanmaz ilk (mevcut durum) bildirimini hemen gönderir. Bu ilk
+  // bildirim yüzünden sayfa açılır açılmaz TÜM ürünler (fotoğraflarıyla) ikinci kez
+  // indiriliyordu. Veri zaten loadData() ile yüklendiği için ilk bildirimi atlıyoruz;
+  // sadece sonradan gelen gerçek değişiklikler yenileme tetikler.
+  const skipFirst = function(){
+    let first = true;
+    return function(){ if(first){ first = false; return; } onAnyChange(); };
+  };
+  const u1 = storeDocRef.onSnapshot(skipFirst(), onErr);
+  const u2 = heroDocRef.onSnapshot(skipFirst(), onErr);
+  const u3 = promosDocRef.onSnapshot(skipFirst(), onErr);
+  const u4 = categoriesDocRef.onSnapshot(skipFirst(), onErr);
   unsubscribeOrders = function(){ u1(); u2(); u3(); u4(); if(debounceTimer) clearTimeout(debounceTimer); };
 }
 
@@ -722,7 +783,7 @@ function mergeIncomingOrders(incoming){
   if(ordersRenderTimer) clearTimeout(ordersRenderTimer);
   ordersRenderTimer = setTimeout(function(){
     ordersRenderTimer = null;
-    try{ localStorage.setItem('kdr_shared_'+STORAGE_KEY, JSON.stringify(DATA)); }catch(e){}
+    try{ localStorage.setItem(CACHE_NS+'kdr_shared_'+STORAGE_KEY, JSON.stringify(DATA)); }catch(e){}
     const active = document.activeElement;
     const isTyping = active && (active.tagName==='INPUT'||active.tagName==='TEXTAREA') && document.body.contains(active);
     // Sipariş verisi, mağaza vitrininde (ürün listesi/banner) hiçbir şeyi etkilemiyor —
@@ -800,6 +861,10 @@ async function storageGet(key, shared){
         if(mainSnap.exists && mainSnap.data().value){
           const obj = JSON.parse(mainSnap.data().value);
           obj.products = prodSnap.docs.map(d=>d.data());
+          try{
+            PRODUCT_BASELINE = new Map(obj.products.map(function(pr){ return [String(pr.id), JSON.stringify(pr)]; }));
+            PRODUCT_BASELINE_READY = true;
+          }catch(_e){}
           if(heroSnap.exists && heroSnap.data().value) obj.hero = JSON.parse(heroSnap.data().value);
           if(promosSnap.exists && promosSnap.data().value) obj.promos = JSON.parse(promosSnap.data().value);
           if(catSnap.exists && catSnap.data().value) obj.categories = JSON.parse(catSnap.data().value);
@@ -815,7 +880,7 @@ async function storageGet(key, shared){
     }catch(e){ console.error('Firestore okuma hatası', e); }
   }
   try{
-    const raw = localStorage.getItem((shared?'kdr_shared_':'kdr_local_')+key);
+    const raw = localStorage.getItem(CACHE_NS+(shared?'kdr_shared_':'kdr_local_')+key);
     return raw!=null ? {key, value:raw, shared} : null;
   }catch(e){ return null; }
 }
@@ -845,20 +910,38 @@ async function storageSet(key, value, shared){
         const rest = Object.assign({}, obj);
         delete rest.products; delete rest.orders; delete rest.hero; delete rest.promos; delete rest.categories;
         const db = firebase.firestore();
-        const existingSnap = await productsColRef.get();
-        const existingIds = new Set(existingSnap.docs.map(d=>d.id));
         const currentIds = new Set(products.map(p=>String(p.id)));
+        const known = PRODUCT_BASELINE_READY;
+        const writeIds = [];   // yazılacak (yeni/değişen) ürünler
+        const deleteIds = [];  // silinecek ürünler
+        for(const p of products){
+          const id = String(p.id);
+          if(!known || PRODUCT_BASELINE.get(id) !== JSON.stringify(p)) writeIds.push(id);
+        }
+        if(known){
+          // Sadece bu tarayıcının bildiği ve şimdi listede OLMAYAN ürünler (yani gerçekten silinenler)
+          PRODUCT_BASELINE.forEach(function(_v, id){ if(!currentIds.has(id)) deleteIds.push(id); });
+        } else {
+          // Bulut hiç okunmamış (ilk kurulum/çevrimdışı): eski davranış
+          const existingSnap = await productsColRef.get();
+          existingSnap.docs.forEach(function(d){ if(!currentIds.has(d.id)) deleteIds.push(d.id); });
+        }
+        const byId = new Map(products.map(p=>[String(p.id), p]));
         let batch = db.batch();
         let opCount = 0;
-        for(const p of products){
-          batch.set(productsColRef.doc(String(p.id)), p);
+        for(const id of writeIds){
+          batch.set(productsColRef.doc(id), byId.get(id));
           opCount++;
           if(opCount>=400){ await batch.commit(); batch = db.batch(); opCount=0; }
         }
-        for(const id of existingIds){
-          if(!currentIds.has(id)){ batch.delete(productsColRef.doc(id)); opCount++; if(opCount>=400){ await batch.commit(); batch = db.batch(); opCount=0; } }
+        for(const id of deleteIds){
+          batch.delete(productsColRef.doc(id)); opCount++;
+          if(opCount>=400){ await batch.commit(); batch = db.batch(); opCount=0; }
         }
         if(opCount>0) await batch.commit();
+        // Başarılı yazımdan sonra baseline'ı güncelle
+        writeIds.forEach(function(id){ PRODUCT_BASELINE.set(id, JSON.stringify(byId.get(id))); });
+        deleteIds.forEach(function(id){ PRODUCT_BASELINE.delete(id); });
         // ÖNEMLİ: ürün koleksiyonundaki değişiklikler (ekleme/silme) Firestore'a TAMAMEN
         // yazılıp bittikten SONRA ana/hero/promo/kategori dokümanlarını yazıyoruz. Bu
         // dokümanlardaki her değişiklik canlı dinleyicileri (onSnapshot) anında tetikler
@@ -880,7 +963,7 @@ async function storageSet(key, value, shared){
     }catch(e){ console.error('Firestore yazma hatası', e); cloudError = e; }
   }
   try{
-    localStorage.setItem((shared?'kdr_shared_':'kdr_local_')+key, value);
+    localStorage.setItem(CACHE_NS+(shared?'kdr_shared_':'kdr_local_')+key, value);
     ok = true;
   }catch(e){ /* storage full or unavailable */ }
   return ok ? {key, value, shared, cloudError} : null;
@@ -1005,13 +1088,148 @@ function applyThemeColor(hex){
 // yapılmıyor demektir — böyle ürünler her zaman "stokta" kabul edilir (eski davranış
 // korunur, admin stok girmediği sürece hiçbir şey değişmez).
 function inStock(p){ return p.stock === null || p.stock === undefined || p.stock > 0; }
+/* ---------- IndexedDB önbelleği ----------
+   localStorage yaklaşık 5MB ile sınırlı. Katalog (özellikle büyük ürün fotoğrafları)
+   buna sığmazsa önbellek hiç yazılamıyor ve sayfa her yenilemede veriyi baştan
+   indirmek zorunda kalıyordu. IndexedDB çok daha büyük veri tutabilir; localStorage'a
+   sığmasa bile katalog burada saklanır ve sonraki açılışlar anında çizilir.
+   Her adım try/catch içinde: IndexedDB kullanılamazsa site eskisi gibi çalışır. */
+function idbOpenCache(){
+  return new Promise(function(resolve){
+    try{
+      const req = indexedDB.open('kdr-cache-' + CACHE_NS, 1);
+      req.onupgradeneeded = function(){ try{ req.result.createObjectStore('kv'); }catch(e){} };
+      req.onsuccess = function(){ resolve(req.result); };
+      req.onerror = function(){ resolve(null); };
+      req.onblocked = function(){ resolve(null); };
+    }catch(e){ resolve(null); }
+  });
+}
+async function idbCacheGet(key){
+  const db = await idbOpenCache();
+  if(!db) return null;
+  return new Promise(function(resolve){
+    try{
+      const r = db.transaction('kv','readonly').objectStore('kv').get(key);
+      r.onsuccess = function(){ resolve(r.result || null); };
+      r.onerror = function(){ resolve(null); };
+    }catch(e){ resolve(null); }
+  });
+}
+async function idbCacheSet(key, value){
+  const db = await idbOpenCache();
+  if(!db) return;
+  try{ db.transaction('kv','readwrite').objectStore('kv').put(value, key); }catch(e){}
+}
+/* ---------- Hız teşhisi: adresin sonuna ?debug eklenirse sol altta ölçüm kutusu gösterilir ---------- */
+const DBG = /[?&]debug(=|&|$)/.test(location.search);
+const DBG_MARKS = {}, DBG_INFO = {};
+function dbgMark(name, extra){
+  if(!DBG) return;
+  DBG_MARKS[name] = Math.round(performance.now());
+  if(extra !== undefined) DBG_INFO[name] = extra;
+  dbgRender();
+}
+function dbgRender(){
+  if(!DBG) return;
+  try{
+    let box = document.getElementById('dbg-box');
+    if(!box){
+      box = document.createElement('div'); box.id = 'dbg-box';
+      box.style.cssText = 'position:fixed;left:6px;bottom:6px;z-index:99999;max-width:94vw;background:rgba(0,0,0,.9);color:#7CFC00;font:11px/1.5 monospace;padding:8px 10px;border-radius:8px;white-space:pre-wrap;word-break:break-word;';
+      document.body.appendChild(box);
+    }
+    const mb = function(n){ return (n/1048576).toFixed(2) + ' MB'; };
+    const w = function(v){ return v === undefined ? 'bekleniyor...' : v + ' ms'; };
+    const prods = (DATA && DATA.products) || [];
+    const imgs = prods.filter(function(p){ return p.image; });
+    const total = imgs.reduce(function(a,p){ return a + String(p.image).length; }, 0);
+    const top = imgs.slice().sort(function(a,b){ return String(b.image).length - String(a.image).length; }).slice(0,3).map(function(p){ return Math.round(String(p.image).length/1024) + 'KB'; }).join(', ');
+    let heroSz = 0; try{ heroSz = JSON.stringify(DATA.hero).length; }catch(e){}
+    const net = navigator.connection ? (navigator.connection.effectiveType || '?') : '?';
+    box.textContent = [
+      'TEŞHİS (ekran görüntüsü al)',
+      'sayfa açılışından itibaren:',
+      '  auth hazır:        ' + w(DBG_MARKS.auth),
+      '  veri indi:         ' + w(DBG_MARKS.fetched),
+      '  ürünler çizildi:   ' + w(DBG_MARKS.ready),
+      'önbellekle açıldı: ' + (DBG_INFO.cache ? 'evet' : 'hayır'),
+      'indirilen katalog: ' + (DBG_INFO.fetched !== undefined ? mb(DBG_INFO.fetched) : '...'),
+      'ürün: ' + prods.length + ' | fotoğraflı: ' + imgs.length + ' | fotoğraf toplamı: ' + mb(total),
+      'en büyük 3 fotoğraf: ' + (top || '-'),
+      'banner (hero) verisi: ' + mb(heroSz),
+      'bağlantı: ' + net + ' | ' + location.protocol
+    ].join('\n');
+  }catch(e){}
+}
+/* ---------- HIZLI İLK AÇILIŞ (önbelleği olmayan ziyaretçi) ----------
+   Tam katalog (fotoğraflar dahil) birkaç MB olabildiği için ilk ziyarette ürünler geç
+   görünüyordu. Burada Firestore REST API'sinin "alan maskesi" özelliğiyle ürünlerin SADECE
+   metin bilgileri (ad, fiyat, kategori...) fotoğrafsız olarak çok küçük bir istekle çekilir ve
+   hemen çizilir; ilk ekrandaki ürünlerin fotoğrafı ayrıca çekilir. Tam veri (fotoğraflar,
+   hero, kategoriler, müşteriler) arkada normal şekilde gelir ve bunun yerine geçer.
+   Kısmi veri varken (PARTIAL_CATALOG) KAYIT YAPILMAZ — böylece eksik veri buluta yazılamaz.
+   Herhangi bir hatada hiçbir şey olmaz, site eskisi gibi tam veriyle açılır. */
+let PARTIAL_CATALOG = false;
+function fsValue(v){
+  if(!v) return null;
+  if('stringValue' in v) return v.stringValue;
+  if('integerValue' in v) return Number(v.integerValue);
+  if('doubleValue' in v) return Number(v.doubleValue);
+  if('booleanValue' in v) return v.booleanValue;
+  if('timestampValue' in v) return v.timestampValue;
+  if('arrayValue' in v) return (v.arrayValue.values||[]).map(fsValue);
+  if('mapValue' in v){ const o = {}; const f = v.mapValue.fields || {}; for(const k in f) o[k] = fsValue(f[k]); return o; }
+  return null;
+}
+async function fastCatalogStart(){
+  try{
+    if(!CATALOG_LOADING || !firebaseReady || typeof firebase === 'undefined' || !firebaseConfig || !firebaseConfig.projectId) return;
+    await withTimeout(firebaseAuthReadyPromise, 8000, 'auth');
+    const user = firebase.auth().currentUser;
+    if(!user) return;
+    const token = await withTimeout(user.getIdToken(), 6000, 'token');
+    const base = 'https://firestore.googleapis.com/v1/projects/' + encodeURIComponent(firebaseConfig.projectId) + '/databases/(default)/documents/kdr_products';
+    const headers = { Authorization: 'Bearer ' + token };
+    const mask = ['id','name','category','price','salePrice','isNew','featured','stock','onSale'].map(function(f){ return 'mask.fieldPaths=' + f; }).join('&');
+    let docs = [], pageToken = '', guard = 0;
+    do{
+      const url = base + '?pageSize=300&' + mask + (pageToken ? '&pageToken=' + encodeURIComponent(pageToken) : '');
+      const res = await withTimeout(fetch(url, { headers: headers }), 12000, 'liste');
+      if(!res.ok) return;
+      const j = await res.json();
+      docs = docs.concat(j.documents || []);
+      pageToken = j.nextPageToken || '';
+    }while(pageToken && ++guard < 20);
+    if(!CATALOG_LOADING) return; // tam veri zaten geldi: kısmi veriye gerek yok
+    const prods = docs.map(function(d){ const o = {}; const f = d.fields || {}; for(const k in f) o[k] = fsValue(f[k]); return o; }).filter(function(x){ return x && x.id; });
+    if(!prods.length) return;
+    DATA.products = prods;
+    PARTIAL_CATALOG = true;
+    CATALOG_LOADING = false;
+    normalizeData();
+    render();
+    dbgMark('partial', prods.length);
+    // İlk ekrandaki ürünlerin fotoğrafını ayrıca çek (en fazla 12 tane)
+    const first = prods.slice(0, 12);
+    await Promise.allSettled(first.map(function(pr){
+      return withTimeout(fetch(base + '/' + encodeURIComponent(String(pr.id)) + '?mask.fieldPaths=image', { headers: headers }), 8000, 'foto')
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(d){ const im = d && d.fields && d.fields.image && d.fields.image.stringValue; if(im) pr.image = im; });
+    }));
+    if(PARTIAL_CATALOG && DATA.products === prods){ render(); dbgMark('partialimg'); }
+  }catch(e){ console.warn('Hızlı açılış atlandı', e); }
+}
 function init(){
+  dbgMark('init');
+  try{ if(DBG) firebaseAuthReadyPromise.then(function(){ dbgMark('auth'); }); }catch(e){}
   // Anında açılış: önce (varsa) yerel önbellekten çiz, ağ isteğini beklemeden.
   try{
-    const cached = localStorage.getItem('kdr_shared_'+STORAGE_KEY);
+    const cached = localStorage.getItem(CACHE_NS+'kdr_shared_'+STORAGE_KEY);
     DATA = cached ? JSON.parse(cached) : defaultData();
     CATALOG_LOADING = !cached;
   }catch(e){ DATA = defaultData(); CATALOG_LOADING = true; }
+  DBG_INFO.cache = !CATALOG_LOADING;
   normalizeData();
   try{
     const cartRaw = localStorage.getItem('kdr_local_'+CART_KEY);
@@ -1020,14 +1238,32 @@ function init(){
   render();
   // Güvenlik: veri 15 sn içinde gelmezse iskelet sonsuza kadar kalmasın.
   if(CATALOG_LOADING) setTimeout(function(){ if(CATALOG_LOADING){ CATALOG_LOADING=false; render(); } }, 15000);
+  // localStorage'da katalog yoksa (ilk açılış ya da sığmadığı için yazılamadıysa)
+  // IndexedDB önbelleğinden anında çizmeyi dene; ağdan taze veri yine arkada gelir.
+  if(CATALOG_LOADING){
+    idbCacheGet('catalog').then(function(v){
+      if(!v || !CATALOG_LOADING) return;
+      try{
+        DATA = JSON.parse(v);
+        PARTIAL_CATALOG = false;
+        normalizeData();
+        CATALOG_LOADING = false;
+        render();
+      }catch(e){ /* bozuk önbellek: yok say */ }
+    });
+  }
+  const _wasLoading = CATALOG_LOADING;
   loadData();
+  if(_wasLoading) fastCatalogStart();
 }
 async function loadData(){
   let beforeJson = catalogComparable(DATA||{});
   try{
     const res = await storageGet(STORAGE_KEY, true);
+    dbgMark('fetched', res && res.value ? res.value.length : 0);
     if(res && res.value){
       DATA = JSON.parse(res.value);
+      PARTIAL_CATALOG = false;
       // ÖNEMLİ: Firestore'dan taze veri geldiğinde yerel önbelleği (localStorage) de
       // hemen güncelliyoruz. Aksi halde önbellek sadece BU tarayıcıdan bir kayıt
       // (ürün ekleme/silme, sipariş vb.) yapıldığında güncelleniyordu — başka bir
@@ -1037,13 +1273,15 @@ async function loadData(){
       // kaldırılmış ürünler kısa süre görünüp), hemen ardından taze veri gelince o
       // ürünler ekrandan siliniyordu — "ürünler belirip kayboluyor" izlenimi buradan
       // geliyordu. Önbellek her yüklemede tazelenince bu "titreme" bir daha oluşmaz.
-      try{ localStorage.setItem('kdr_shared_'+STORAGE_KEY, res.value); }catch(e){}
+      try{ localStorage.setItem(CACHE_NS+'kdr_shared_'+STORAGE_KEY, res.value); }catch(e){}
+      idbCacheSet('catalog', res.value);
     }
     else if(!DATA){ DATA = defaultData(); await saveData(); }
   }catch(e){ if(!DATA) DATA = defaultData(); }
   normalizeData();
   lastCatalogCompareJson = catalogComparable(DATA);
   if(CATALOG_LOADING){ CATALOG_LOADING = false; render(); beforeJson = catalogComparable(DATA); }
+  dbgMark('ready');
   try{
     const cres = await storageGet(CART_KEY, false);
     CART = (cres && cres.value) ? JSON.parse(cres.value) : CART;
@@ -1060,6 +1298,7 @@ async function loadData(){
   startOrdersColWatcher();
 }
 async function saveData(){
+  if(PARTIAL_CATALOG){ showToast('Site hâlâ yükleniyor, birkaç saniye sonra tekrar deneyin'); return; }
   try{
     const json = JSON.stringify(DATA);
     const result = await storageSet(STORAGE_KEY, json, true);
@@ -1074,6 +1313,28 @@ async function saveData(){
   }
   catch(e){ console.error('save failed', e); showToast('Kaydetme hatası'); }
 }
+// Hafif kayıt: sadece yerel önbelleği anında yazar, buluta ise yalnızca ana dokümanı
+// (müşteriler dahil, ürün/hero/promo/kategori HARİÇ) arka planda yazar. Ürün koleksiyonunu
+// tekrar yazmadığı için bekletmez. Hesap kaydı gibi katalogu değiştirmeyen işlemler içindir.
+function saveDataLight(){
+  if(PARTIAL_CATALOG) return;
+  saveOrdersLocalOnly();
+  (async function(){
+    try{
+      if(firebaseReady && storeDocRef){
+        await firebaseAuthReadyPromise;
+        const rest = Object.assign({}, DATA);
+        delete rest.products; delete rest.orders; delete rest.hero; delete rest.promos; delete rest.categories;
+        await storeDocRef.set({ value: JSON.stringify(rest), updatedAt: Date.now() });
+      } else {
+        await saveData();
+      }
+    }catch(e){
+      console.error('Hafif kayıt hatası', e);
+      showToast('Bulut kaydı başarısız: ' + String((e && e.message) || e).slice(0,120));
+    }
+  })();
+}
 // Siparişler kendi ayrı Firestore koleksiyonunda (kdr_orders) senkronize edilir — bu
 // yüzden bir sipariş eklenip/silindiğinde tüm katalogu (ürünler/hero/promo/kategori)
 // tekrar Firestore'a yazmaya GEREK YOK. Bunu yapmak hem gereksiz hem de kendi canlı
@@ -1082,7 +1343,8 @@ async function saveData(){
 // güncelliyoruz; paylaşılan senkronizasyonu syncOrderToFirestore()/deleteOrderFromFirestore()
 // üstlenir.
 function saveOrdersLocalOnly(){
-  try{ localStorage.setItem('kdr_shared_'+STORAGE_KEY, JSON.stringify(DATA)); }catch(e){}
+  if(PARTIAL_CATALOG) return;
+  try{ localStorage.setItem(CACHE_NS+'kdr_shared_'+STORAGE_KEY, JSON.stringify(DATA)); }catch(e){}
 }
 async function saveCart(){
   try{ await storageSet(CART_KEY, JSON.stringify(CART), false); }catch(e){ console.error('cart save failed', e); }
@@ -1209,6 +1471,8 @@ function onCardTiltLeave(e){
 // hedefi doğrudan KAYDEDİLECEK METNİN UZUNLUĞUNA göre ölçüyoruz.
 const DOC_BUDGET_BYTES = 900 * 1024; // ~900KB'lık base64 METİN bütçesi (1.048.487 byte sınırına karşı güvenli pay).
 const IMG_TARGET_BYTES = DOC_BUDGET_BYTES; // tek görselli alanlar (ürün, logo vb.) için tavan.
+const PRODUCT_IMG_BYTES = 50 * 1024; // ürün fotoğrafı hedefi: sayfa hızlı açılsın diye ~50KB
+const PRODUCT_IMG_MAXDIM = 800;      // ürün fotoğrafı en uzun kenar sınırı (px)
 
 // Firestore'a KAYDEDİLECEK gerçek boyut: base64 metninin kendi uzunluğu (ASCII
 // karakterler olduğu için karakter sayısı ≈ byte sayısı). Sıkıştırma döngüsü ve
@@ -1223,10 +1487,10 @@ function dataUrlBytes(dataUrl){
   return Math.round(b64.length * 0.75);
 }
 
-function compressToTarget(img, targetBytes){
+function compressToTarget(img, targetBytes, maxDimOpt, startQuality){
   const target = targetBytes || IMG_TARGET_BYTES;
   // Adım 1: yüksek çözünürlüğü koru — sadece aşırı büyük fotoğrafları sınırla
-  const maxDim = 3600; // yüksek çözünürlük üst sınırı (aşırı büyük fotoğraflar için)
+  const maxDim = maxDimOpt || 3600; // yüksek çözünürlük üst sınırı (aşırı büyük fotoğraflar için)
   let w = img.width, h = img.height;
   if(w > maxDim || h > maxDim){
     if(w >= h){ h = Math.round(h * maxDim / w); w = maxDim; }
@@ -1246,7 +1510,7 @@ function compressToTarget(img, targetBytes){
   render(w, h);
 
   // Adım 2: yüksek kaliteden başla, hedefin altındaysak kaliteyi düşürmeye gerek yok
-  let quality = 0.97;
+  let quality = startQuality || 0.97;
   dataUrl = canvas.toDataURL('image/jpeg', quality);
   while(storedStringBytes(dataUrl) > target && quality > 0.5){
     quality -= 0.06;
@@ -1345,8 +1609,9 @@ function handleImageFile(event, hiddenId, previewId){
   reader.onload = e => {
     const img = new Image();
     img.onload = async () => {
-      const budget = currentBudgetFor(hiddenId);
-      const dataUrl = compressToTarget(img, budget);
+      const isProductPhoto = (hiddenId === 'f-img');
+      const budget = isProductPhoto ? PRODUCT_IMG_BYTES : currentBudgetFor(hiddenId);
+      const dataUrl = isProductPhoto ? compressToTarget(img, budget, PRODUCT_IMG_MAXDIM, 0.9) : compressToTarget(img, budget);
       if(hidden) hidden.value = dataUrl;
       if(prev){ prev.style.backgroundImage = `url(${dataUrl})`; prev.textContent=''; }
       const kb = Math.round(dataUrlBytes(dataUrl)/1024);
@@ -1397,7 +1662,7 @@ function uploadWidget(hiddenId, previewId, urlId, currentValue, icon){
 function productImg(prod){
   const bg = catColor(prod.category);
   if(prod.image){
-    return `<div class="card-img" style="background:${bg}"><img src="${esc(prod.image)}" onerror="this.parentElement.textContent='${catIcon(prod.category)}'; this.parentElement.style.fontSize='54px';"></div>`;
+    return `<div class="card-img" style="background:${bg}"><img loading="lazy" decoding="async" src="${esc(prod.image)}" onerror="this.parentElement.textContent='${catIcon(prod.category)}'; this.parentElement.style.fontSize='54px';"></div>`;
   }
   return `<div class="card-img" style="background:${bg}">${catIcon(prod.category)}</div>`;
 }
@@ -1768,6 +2033,7 @@ function goRegister(){ ACCOUNT.step='register'; render(); }
 function backToStart(){ ACCOUNT.step='start'; render(); }
 
 async function doRegister(){
+  if(PARTIAL_CATALOG || CATALOG_LOADING){ showToast('Site yükleniyor, birkaç saniye sonra tekrar deneyin'); return; }
   const name = document.getElementById('acc-name').value.trim();
   const surname = document.getElementById('acc-surname').value.trim();
   const email = document.getElementById('acc-email').value.trim().toLowerCase();
@@ -1788,15 +2054,18 @@ async function doRegister(){
     createdAt: new Date().toISOString()
   };
   DATA.customers.push(customer);
-  await saveData();
+  // Kayıt ANINDA tamamlanır: hesap yerelde hemen kaydedilir, buluta yazma arka planda yapılır
+  // (eskiden tüm ürün kataloğu buluta yazılıp beklendiği için ~6 sn sürüyordu).
+  saveDataLight();
   CUSTOMER = customer;
-  await saveCustomerSession();
+  saveCustomerSession();
   ACCOUNT.step='profile'; ACCOUNT.tab='profil';
   render();
   showToast('Kayıt tamamlandı, hoş geldiniz ' + name + '!');
 }
 
 async function doLogin(){
+  if(PARTIAL_CATALOG || CATALOG_LOADING){ showToast('Site yükleniyor, birkaç saniye sonra tekrar deneyin'); return; }
   const email = document.getElementById('acc-login-email').value.trim().toLowerCase();
   const password = document.getElementById('acc-login-password').value;
   if(!email || !password){ showToast('E-posta ve şifrenizi girin'); return; }
@@ -2380,10 +2649,17 @@ function syncDiscountFromPrice(){
   if(pctEl.value.trim()){ syncSaleFromPct(); }
   else { syncPctFromSale(); }
 }
-function saveProduct(editing){
+let SAVING_PRODUCT = false;
+async function saveProduct(editing){
+  if(SAVING_PRODUCT) return; // çift tıklamada aynı ürün iki kez eklenmesin
+  SAVING_PRODUCT = true;
+  try{ await saveProductImpl(editing); }
+  finally{ SAVING_PRODUCT = false; }
+}
+async function saveProductImpl(editing){
   const name = document.getElementById('f-name').value.trim();
   const category = document.getElementById('f-cat').value;
-  const image = document.getElementById('f-img').value.trim();
+  let image = document.getElementById('f-img').value.trim();
   const price = parseFloat(document.getElementById('f-price').value) || 0;
   const saleRaw = document.getElementById('f-sale').value;
   const salePrice = saleRaw ? parseFloat(saleRaw) : null;
@@ -2393,7 +2669,21 @@ function saveProduct(editing){
   const stock = stockRaw === '' ? null : Math.max(0, parseInt(stockRaw, 10) || 0);
   if(!name){ showToast('Lütfen ürün adı girin'); return; }
   if(document.getElementById('f-onsale').checked && !salePrice){ showToast('İndirimli için önce Fiyat (₺) alanını doldurun'); return; }
-  if(editing==='new'){ DATA.products.unshift({ id:uuid(), name, category, price, salePrice, image, isNew, featured, stock }); }
+  const newId = (editing==='new') ? uuid() : null;
+  if(isDataUrl(image)){
+    if(Date.now() < STORAGE_DOWN_UNTIL){
+      // Storage kısa süre önce yanıt vermedi: bekletmeden doğrudan veritabanına gömülü kaydet
+    } else {
+      showToast('Fotoğraf yükleniyor...');
+      try{ image = await uploadDataUrlToStorage(image, 'products', newId || editing); }
+      catch(e){
+        console.error('Storage yükleme hatası', e);
+        STORAGE_DOWN_UNTIL = Date.now() + 5*60*1000;
+        showToast('Fotoğraf Storage\'a yüklenemedi, veritabanına gömülü kaydediliyor');
+      }
+    }
+  }
+  if(editing==='new'){ DATA.products.unshift({ id:newId, name, category, price, salePrice, image, isNew, featured, stock }); }
   else { const p = DATA.products.find(p=>p.id===editing); Object.assign(p, {name, category, price, salePrice, image, isNew, featured, stock}); }
   ADMIN.editingProduct = null;
   saveData(); render(); showToast('Ürün kaydedildi');
@@ -2811,9 +3101,171 @@ async function deleteCategory(id){
   saveData(); render(); showToast('Kategori silindi');
 }
 
+/* ---------- Firebase Storage: görselleri veritabanına gömmek yerine URL olarak sakla ----------
+   Firestore dokümanına Base64 gömülü görsel, ürün listesi her çekildiğinde indiriliyor ve
+   siteyi yavaşlatıyor. Burada görsel Storage'a yüklenir, dokümanda sadece URL kalır.
+   Gerekenler: Firebase planı Blaze + Storage etkin + Storage kuralları (yazılı not için README). */
+function withTimeout(promise, ms, msg){
+  return new Promise(function(resolve, reject){
+    const t = setTimeout(function(){ reject(new Error(msg || 'Zaman aşımı')); }, ms);
+    promise.then(function(v){ clearTimeout(t); resolve(v); }, function(e){ clearTimeout(t); reject(e); });
+  });
+}
+const STORAGE_UPLOAD_TIMEOUT_MS = 6000;
+let STORAGE_DOWN_UNTIL = 0; // Storage yanıt vermezse kısa süre denemeyi bırak, fotoğraf doğrudan gömülsün
+async function uploadDataUrlToStorage(dataUrl, folder, id){
+  if(!firebaseReady || !firebaseStorageRef) throw new Error('Firebase Storage başlatılamadı');
+  await withTimeout(firebaseAuthReadyPromise, 5000, 'Firebase girişi zaman aşımına uğradı');
+  const m = /^data:([^;,]+)[;,]/.exec(dataUrl);
+  const type = m ? m[1] : 'image/jpeg';
+  const ext = ({'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif','image/svg+xml':'svg'})[type] || 'jpg';
+  const safeId = String(id).replace(/[^a-zA-Z0-9_-]/g,'-');
+  const ref = firebaseStorageRef.child(folder + '/' + safeId + '-' + Date.now().toString(36) + '.' + ext);
+  const task = ref.putString(dataUrl, 'data_url', { contentType:type, cacheControl:'public,max-age=31536000' });
+  let snap;
+  try{ snap = await withTimeout(task, STORAGE_UPLOAD_TIMEOUT_MS, 'Storage yanıt vermedi (etkin değil ya da kurallar yazmaya izin vermiyor olabilir)'); }
+  catch(e){ try{ task.cancel(); }catch(_){} throw e; }
+  return await withTimeout(snap.ref.getDownloadURL(), 8000, 'Görsel adresi alınamadı');
+}
+// Base64 görseli (sadece JPEG fotoğrafları) ~120KB / 1100px'e indirir; PNG'lere dokunmaz (şeffaflık bozulmasın).
+function shrinkJpegDataUrl(dataUrl){
+  return new Promise(function(resolve){
+    if(!/^data:image\/jpe?g/i.test(dataUrl) || storedStringBytes(dataUrl) <= 150*1024){ resolve(dataUrl); return; }
+    const img = new Image();
+    img.onload = function(){
+      try{
+        const out = compressToTarget(img, 120*1024, 1100, 0.9);
+        resolve(storedStringBytes(out) < storedStringBytes(dataUrl) ? out : dataUrl);
+      }catch(e){ resolve(dataUrl); }
+    };
+    img.onerror = function(){ resolve(dataUrl); };
+    img.src = dataUrl;
+  });
+}
+function downloadJsonBackup(){
+  try{
+    const blob = new Blob([JSON.stringify({ products:DATA.products, hero:DATA.hero, promos:DATA.promos, categories:DATA.categories, logo:DATA.logo, partners:DATA.partners })], { type:'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'katalog-yedek-' + new Date().toISOString().slice(0,10) + '.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 5000);
+    return true;
+  }catch(e){ return false; }
+}
+function imageSlots(){
+  const slots = [];
+  (DATA.products||[]).forEach(function(p){ slots.push({ obj:p, key:'image', folder:'products', id:p.id, photo:true, maxBytes:PRODUCT_IMG_BYTES, maxDim:PRODUCT_IMG_MAXDIM }); });
+  const h = DATA.hero;
+  if(h && Array.isArray(h.images)) h.images.forEach(function(_,i){ slots.push({ obj:h.images, key:i, folder:'hero', id:'hero-'+i, maxBytes:150*1024, maxDim:1400 }); });
+  (DATA.promos||[]).forEach(function(x,i){ slots.push({ obj:x, key:'image', folder:'promos', id:'promo-'+i, maxBytes:100*1024, maxDim:1000 }); });
+  (DATA.categories||[]).forEach(function(c){
+    slots.push({ obj:c, key:'image', folder:'categories', id:'cat-'+c.id, maxBytes:60*1024, maxDim:600 });
+    (c.subs||[]).forEach(function(sc){ slots.push({ obj:sc, key:'image', folder:'categories', id:'sub-'+sc.id, maxBytes:60*1024, maxDim:600 }); });
+  });
+  if(DATA.logo) slots.push({ obj:DATA.logo, key:'image', folder:'site', id:'logo' });
+  (DATA.partners||[]).forEach(function(x,i){ slots.push({ obj:x, key:'image', folder:'partners', id:'partner-'+i }); });
+  return slots.filter(function(s){ return isDataUrl(s.obj[s.key]); });
+}
+async function migrateImagesToStorage(){
+  const slots = imageSlots();
+  const rep = function(html){ const el = document.getElementById('migrate-report'); if(el) el.innerHTML = html; };
+  if(!slots.length){ showToast('Taşınacak Base64 görsel yok, hepsi zaten URL'); return; }
+  if(!(await appConfirm(slots.length + ' görsel Firebase Storage\'a taşınacak. Önce otomatik yedek (JSON dosyası) indirilecek. Devam edilsin mi?', 'Taşı'))) return;
+  if(!downloadJsonBackup()){
+    if(!(await appConfirm('Yedek indirilemedi. Yine de devam edilsin mi?', 'Devam'))) return;
+  }
+  let ok = 0, fail = 0, lastErr = '';
+  for(let i=0; i<slots.length; i++){
+    const s = slots[i];
+    showToast('Görseller taşınıyor... ' + (i+1) + '/' + slots.length);
+    try{
+      let data = s.obj[s.key];
+      if(s.photo) data = await shrinkJpegDataUrl(data);
+      const url = await uploadDataUrlToStorage(data, s.folder, s.id);
+      s.obj[s.key] = url; ok++;
+    }catch(e){
+      fail++; lastErr = String((e && (e.code || e.message)) || e);
+      console.error('Taşıma hatası', s.folder, s.id, e);
+      if(ok === 0 && fail >= 2) break; // ilk ikisi de başarısızsa Storage kapalı/yetkisiz demektir, boşuna devam etme
+    }
+  }
+  if(ok){ await saveData(); render(); }
+  if(!ok){
+    showToast('Taşıma başarısız: ' + lastErr.slice(0,100));
+    rep('Hiçbir görsel taşınamadı (' + esc(lastErr) + '). Firebase planı Blaze mi, Storage etkin mi ve kurallar yazmaya izin veriyor mu kontrol edin. Hiçbir veri değiştirilmedi.');
+  } else {
+    showToast('Tamamlandı: ' + ok + ' görsel taşındı' + (fail ? ', ' + fail + ' başarısız' : ''));
+    rep('Taşınan: ' + ok + ' | Başarısız: ' + fail + (fail ? ' (' + esc(lastErr) + ')' : '') + '. Yedek dosyasını güvenli bir yerde saklayın.');
+  }
+}
+async function runSpeedReport(){
+  const out = document.getElementById('speed-report');
+  if(!out) return;
+  const sizeOf = v => { try{ return JSON.stringify(v).length; }catch(e){ return 0; } };
+  const mb = n => (n/1048576).toFixed(2) + ' MB';
+  const kb = n => Math.round(n/1024) + ' KB';
+  const parts = Object.keys(DATA).map(k=>[k, sizeOf(DATA[k])]).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const total = sizeOf(DATA);
+  const imgs = (DATA.products||[]).filter(p=>p.image);
+  const imgBytes = imgs.reduce((sum,p)=>sum+String(p.image).length, 0);
+  const big = imgs.slice().sort((a,b)=>String(b.image).length-String(a.image).length).slice(0,5);
+  let cached = null;
+  try{ cached = localStorage.getItem(CACHE_NS+'kdr_shared_'+STORAGE_KEY); }catch(e){}
+  let idbv = null;
+  try{ idbv = await idbCacheGet('catalog'); }catch(e){}
+  const lines = [];
+  lines.push('Toplam veri: ' + mb(total));
+  lines.push('Ürün: ' + (DATA.products||[]).length + ' adet, fotoğraflı: ' + imgs.length + ', fotoğraf toplamı: ' + mb(imgBytes));
+  lines.push('En büyük bölümler: ' + parts.map(x=>x[0]+' '+mb(x[1])).join(' | '));
+  lines.push('En büyük 5 ürün fotoğrafı: ' + big.map(p=>esc(p.name||'?')+' '+kb(String(p.image).length)).join(' | '));
+  lines.push('Tarayıcı önbelleği (hızlı açılış): ' + (cached ? 'VAR (' + mb(cached.length) + ')' : 'YOK — veri tarayıcıya sığmıyor/kaydedilemiyor olabilir'));
+  lines.push('Yedek önbellek (IndexedDB): ' + (idbv ? 'VAR (' + mb(idbv.length) + ')' : 'YOK (siteyi bir kez normal açınca oluşur)'));
+  out.innerHTML = lines.join('<br>');
+}
+async function optimizeProductImages(){
+  // Ürün fotoğrafları + banner (hero) + promosyon + kategori görselleri (sadece JPEG; PNG/logo'ya dokunulmaz)
+  const big = imageSlots().filter(function(sl){
+    const v = sl.obj[sl.key];
+    return sl.maxBytes && /^data:image\/jpe?g/i.test(v) && storedStringBytes(v) > sl.maxBytes * 1.15;
+  });
+  if(!big.length){ showToast('Tüm görseller zaten hafif'); return; }
+  if(!(await appConfirm(big.length + ' görsel küçültülecek (ürünler, banner, promosyon, kategori). Görünüm neredeyse aynı kalır, site çok daha hızlı açılır. Önce otomatik yedek (JSON dosyası) indirilecek. Devam edilsin mi?', 'Optimize Et'))) return;
+  downloadJsonBackup();
+  let done = 0, savedKB = 0;
+  for(const sl of big){
+    showToast('Görseller küçültülüyor... ' + (done+1) + '/' + big.length);
+    await new Promise(function(resolve){
+      const img = new Image();
+      img.onload = function(){
+        try{
+          const before = storedStringBytes(sl.obj[sl.key]);
+          const out = compressToTarget(img, sl.maxBytes, sl.maxDim, 0.9);
+          if(storedStringBytes(out) < before){ savedKB += Math.round((before - storedStringBytes(out))/1024); sl.obj[sl.key] = out; }
+        }catch(e){ console.error('Optimize hatası', e); }
+        done++; resolve();
+      };
+      img.onerror = function(){ done++; resolve(); };
+      img.src = sl.obj[sl.key];
+    });
+  }
+  await saveData();
+  render();
+  showToast('Tamamlandı: ' + done + ' görsel küçültüldü (~' + Math.round(savedKB/1024*10)/10 + ' MB tasarruf)');
+}
 function adminSettings(){
   const logo = DATA.logo || { image:'', size:56 };
   return `
+  <div class="panel">
+    <h3>Site Hızı</h3>
+    <div class="hint">Ürün fotoğrafları büyük boyutlu kaydedildiyse site geç açılır. Bu düğme ürün fotoğraflarını, banner'ı, promosyon ve kategori görsellerini küçültür; görünüm neredeyse aynı kalır, sayfa çok daha hızlı açılır.</div>
+    <button class="btn" style="margin-top:10px;" onclick="optimizeProductImages()">Ürün Fotoğraflarını Optimize Et</button>
+    <button class="btn" style="margin-top:10px; margin-left:8px;" onclick="runSpeedReport()">Hız Raporu Göster</button>
+    <div id="speed-report" class="hint" style="margin-top:12px; line-height:1.7;"></div>
+    <div class="hint" style="margin-top:18px;"><b>İsteğe bağlı (gerekmez):</b> Görselleri Firebase Storage'a taşı. Sadece Blaze planı ve Storage etkinse çalışır; ücretsiz planda yukarıdaki Optimize düğmesi yeterlidir.</div>
+    <button class="btn" style="margin-top:10px;" onclick="migrateImagesToStorage()">Görselleri Storage'a Taşı</button>
+    <div id="migrate-report" class="hint" style="margin-top:12px; line-height:1.7;"></div>
+  </div>
   <div class="panel">
     <h3>Logo</h3>
     <div class="hint">Kendi logo görselinizi yükleyin ve başlıktaki boyutunu ayarlayın. Görsel yüklemezseniz varsayılan "5S" simgesi gösterilir.</div>
@@ -2944,6 +3396,32 @@ if('serviceWorker' in navigator){
     navigator.serviceWorker.register('./service-worker.js').catch(function(e){ console.warn('Service worker kaydedilemedi', e); });
   });
 }
+</script>
+<script>
+/* Açılış animasyonu: sitedeki logoyu (yönetim panelinden yüklenen ya da varsayılan) kullanır */
+(function(){
+  var el = document.getElementById('fd-intro');
+  if(!el) return;
+  var done = function(){ if(el && el.parentNode){ el.parentNode.removeChild(el); } el = null; };
+  el.addEventListener('animationend', function(e){ if(e.animationName === 'fdOut' || e.animationName === 'fdSkip') done(); });
+  el.addEventListener('click', function(){ el.style.animation = 'fdSkip .3s ease forwards'; });
+  setTimeout(done, 7000); // güvenlik: her durumda kaldır
+  var src = '';
+  try { src = (DATA && DATA.logo && DATA.logo.image) ? DATA.logo.image : DEFAULT_LOGO_IMG; } catch(e){}
+  if(!src){ done(); return; }
+  var img = document.getElementById('fd-intro-img');
+  var shine = document.getElementById('fd-intro-shine');
+  var start = function(){
+    if(!el) return;
+    var m = 'url("' + src + '")';
+    shine.style.webkitMaskImage = m; shine.style.maskImage = m;
+    el.className = 'go';
+  };
+  img.onload = start;
+  img.onerror = done;
+  img.src = src;
+  if(img.complete && img.naturalWidth) start();
+})();
 </script>
 </body>
 </html>
