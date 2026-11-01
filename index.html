@@ -3509,7 +3509,8 @@ if('serviceWorker' in navigator){
   function findCombo(){ return document.querySelector('select.goog-te-combo'); }
   function waitCombo(cb, tries){
     var c = findCombo();
-    if(c){ gtReady = true; cb(c); return; }
+    // Google kutusu eklenir eklenmez dil listesi boş olabilir; liste dolana kadar bekle (en fazla ~3 sn)
+    if(c && (c.options.length > 1 || (tries||0) > 30)){ gtReady = true; cb(c); return; }
     if(tries > 150) return; // ~15 sn sonra vazgeç
     setTimeout(function(){ waitCombo(cb, (tries||0) + 1); }, 100);
   }
@@ -3531,7 +3532,27 @@ if('serviceWorker' in navigator){
     sc.onerror = function(){ gtLoading = false; console.warn('Google Translate yüklenemedi'); };
     document.head.appendChild(sc);
   }
-  function applyCombo(c, code){ c.value = code; c.dispatchEvent(new Event('change')); }
+  // Çeviri gerçekten uygulandı mı? (Google <html>'e translated-ltr/rtl sınıfı ve googtrans çerezi yazar)
+  function isApplied(code){
+    var translated = /translated-(ltr|rtl)/.test(document.documentElement.className || '');
+    var m = /(?:^|;\s*)googtrans=([^;]*)/.exec(document.cookie || '');
+    var cookieOk = !!m && decodeURIComponent(m[1]).split('/').pop() === code;
+    return translated && cookieOk;
+  }
+  var applyToken = 0;
+  // İlk seçimde Google motoru henüz hazır olmadığı için değişiklik sessizce yok sayılabiliyor;
+  // çeviri uygulanana kadar seçimi kısa aralıklarla tekrar uygula.
+  function applyCombo(c, code){
+    var tok = ++applyToken, tries = 0;
+    (function attempt(){
+      if(tok !== applyToken) return; // arada başka dil seçildiyse bu denemeyi bırak
+      var cur = findCombo() || c;
+      cur.value = code;
+      cur.dispatchEvent(new Event('change'));
+      if(++tries >= 8) return;
+      setTimeout(function(){ if(tok === applyToken && !isApplied(code)) attempt(); }, 700);
+    })();
+  }
   function clearCookies(){
     var past = 'expires=Thu, 01 Jan 1970 00:00:00 GMT';
     var host = location.hostname, parts = host.split('.'), doms = [host];
@@ -3631,6 +3652,8 @@ if('serviceWorker' in navigator){
     }
     if(!AUTO_DETECT) return;
     detectCountry(function(cc){
+      // Ülke tespiti biterken ziyaretçi dili zaten elle seçtiyse onun seçimini ezme
+      if(ls(MKEY)) return;
       var lang = cc ? window.fdCountryLang(cc) : normalize(navigator.language || (navigator.languages && navigator.languages[0]));
       try{ console.info('[dil] ülke:', cc, '→ dil:', lang); }catch(e){}
       if(lang && lang !== PAGE){
