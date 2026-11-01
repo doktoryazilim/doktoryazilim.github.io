@@ -2688,8 +2688,16 @@ let SAVING_PRODUCT = false;
 async function saveProduct(editing){
   if(SAVING_PRODUCT) return; // çift tıklamada aynı ürün iki kez eklenmesin
   SAVING_PRODUCT = true;
+  // Fotoğraf yüklenirken düğme "çalışmıyor" gibi görünmesin: görünür geri bildirim ver
+  const btn = document.querySelector('button[onclick^="saveProduct("]');
+  const btnLabel = btn ? btn.textContent : '';
+  if(btn){ btn.disabled = true; btn.textContent = 'Kaydediliyor...'; }
   try{ await saveProductImpl(editing); }
-  finally{ SAVING_PRODUCT = false; }
+  catch(e){ console.error('Ürün kaydetme hatası', e); showToast('Ürün kaydedilemedi: ' + String((e && e.message) || e).slice(0,100)); }
+  finally{
+    SAVING_PRODUCT = false;
+    if(btn && document.body.contains(btn)){ btn.disabled = false; btn.textContent = btnLabel; }
+  }
 }
 async function saveProductImpl(editing){
   const name = document.getElementById('f-name').value.trim();
@@ -3173,7 +3181,7 @@ async function uploadDataUrlToStorageOnce(dataUrl, folder, id){
   const ref = firebaseStorageRef.child(folder + '/' + safeId + '-' + Date.now().toString(36) + '.' + ext);
   const task = ref.putString(dataUrl, 'data_url', { contentType:type, cacheControl:'public,max-age=31536000' });
   let snap;
-  try{ snap = await withTimeout(task, Math.min(45000, STORAGE_UPLOAD_TIMEOUT_MS + Math.round(dataUrl.length / 1024) * 25), 'Storage yanıt vermedi (etkin değil ya da kurallar yazmaya izin vermiyor olabilir)'); }
+  try{ snap = await withTimeout(task, Math.min(25000, STORAGE_UPLOAD_TIMEOUT_MS + Math.round(dataUrl.length / 1024) * 10), 'Storage yanıt vermedi (etkin değil ya da kurallar yazmaya izin vermiyor olabilir)'); }
   catch(e){ try{ task.cancel(); }catch(_){} throw e; }
   return await withTimeout(snap.ref.getDownloadURL(), 15000, 'Görsel adresi alınamadı');
 }
