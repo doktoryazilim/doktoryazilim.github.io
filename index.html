@@ -3508,7 +3508,7 @@ if('serviceWorker' in navigator){
           autoDisplay: false
         }, 'google_translate_element');
       }catch(e){ console.warn('Çeviri başlatılamadı', e); }
-      waitCombo(function(c){ var q = queue.slice(); queue = []; q.forEach(function(code){ applyCombo(c, code); }); }, 0);
+      waitCombo(function(c){ setTimeout(function(){ var q = queue.slice(); queue = []; q.forEach(function(code){ applyCombo(findCombo() || c, code); }); }, 500); }, 0);
     };
     var sc = document.createElement('script');
     sc.src = 'https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit';
@@ -3516,7 +3516,22 @@ if('serviceWorker' in navigator){
     sc.onerror = function(){ gtLoading = false; console.warn('Google Translate yüklenemedi'); };
     document.head.appendChild(sc);
   }
-  function applyCombo(c, code){ c.value = code; c.dispatchEvent(new Event('change')); }
+  function applyCombo(c, code, n){
+    n = n || 0;
+    c.value = code; c.dispatchEvent(new Event('change'));
+    // İlk denemede Google henüz hazır olmayabilir: çeviri gerçekten uygulanmadıysa tekrar dene
+    setTimeout(function(){
+      if(window.fdLangCode !== code) return; // kullanıcı bu arada başka dil seçti
+      var cc = findCombo() || c;
+      var done = /translated-(ltr|rtl)/.test(document.documentElement.className) && cc.value === code;
+      if(!done && n < 5) applyCombo(cc, code, n + 1);
+    }, 700);
+  }
+  function setCookie(code){
+    var v = '/' + PAGE + '/' + code, parts = location.hostname.split('.');
+    document.cookie = 'googtrans=' + v + '; path=/';
+    if(parts.length > 1) document.cookie = 'googtrans=' + v + '; path=/; domain=.' + parts.slice(-2).join('.');
+  }
   function clearCookies(){
     var past = 'expires=Thu, 01 Jan 1970 00:00:00 GMT';
     var host = location.hostname, parts = host.split('.'), doms = [host];
@@ -3525,6 +3540,7 @@ if('serviceWorker' in navigator){
     doms.forEach(function(d){ document.cookie = 'googtrans=; ' + past + '; path=/; domain=' + d; });
   }
   function translateTo(code){
+    setCookie(code); // widget ilk yüklenişte dili çerezden okur, ilk seçimde de çalışır
     var c = findCombo();
     if(c) applyCombo(c, code);
     else { queue = [code]; loadGT(); }
