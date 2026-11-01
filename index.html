@@ -531,6 +531,8 @@ let heroDocRef = null;
 let promosDocRef = null;
 let categoriesDocRef = null;
 let firebaseStorageRef = null;
+let firebaseStorageAltRef = null; // diğer olası bucket adı (.appspot.com <-> .firebasestorage.app)
+let PREFER_ALT_BUCKET = false;
 let ordersColRef = null;
 let productsColRef = null;
 /* Bulutta (kdr_products) EN SON gördüğümüz ürün hâli: id -> JSON. Kayıt sırasında sadece
@@ -560,6 +562,13 @@ try{
     productsColRef = firebase.firestore().collection('kdr_products');
     firebaseReady = true;
     try{ const _st = firebase.storage(); try{ _st.setMaxUploadRetryTime(12000); _st.setMaxOperationRetryTime(12000); }catch(_e){} firebaseStorageRef = _st.ref(); }catch(e){ console.error('Firebase Storage başlatma hatası (Storage etkinleştirilmemiş olabilir):', e); }
+    try{
+      const _b = firebaseConfig.storageBucket || '', _pid = firebaseConfig.projectId;
+      let _alt = null;
+      if(/firebasestorage\.app$/.test(_b)) _alt = _pid + '.appspot.com';
+      else if(/appspot\.com$/.test(_b)) _alt = _pid + '.firebasestorage.app';
+      if(_alt){ const _s2 = firebase.app().storage('gs://' + _alt); try{ _s2.setMaxUploadRetryTime(12000); _s2.setMaxOperationRetryTime(12000); }catch(_e){} firebaseStorageAltRef = _s2.ref(); }
+    }catch(e){ console.warn('Alternatif bucket hazırlanamadı', e); }
     firebase.auth().onAuthStateChanged(function(user){
       if(user){ resolveAuthReady(); }
       else{
@@ -3177,12 +3186,16 @@ async function uploadDataUrlToStorage(dataUrl, folder, id){
   let lastErr;
   for(let attempt = 0; attempt < 3; attempt++){
     if(attempt > 0) await new Promise(function(r){ setTimeout(r, 1500 * attempt); });
-    try{ return await uploadDataUrlToStorageOnce(dataUrl, folder, id); }
+    // Bucket adı yanlışsa (tarayıcı CORS/ERR_FAILED verir) sırayla öbür adı da dene
+    const order = PREFER_ALT_BUCKET && firebaseStorageAltRef ? [firebaseStorageAltRef, firebaseStorageRef, firebaseStorageAltRef]
+                                                              : [firebaseStorageRef, firebaseStorageAltRef || firebaseStorageRef, firebaseStorageRef];
+    const useRef = order[attempt];
+    try{ const url = await uploadDataUrlToStorageOnce(dataUrl, folder, id, useRef); PREFER_ALT_BUCKET = (useRef === firebaseStorageAltRef && useRef !== firebaseStorageRef); return url; }
     catch(e){
       lastErr = e;
       console.warn('Storage yükleme denemesi başarısız (' + (attempt + 1) + '/3)', e);
       const code = String((e && e.code) || '');
-      if(code === 'storage/unauthorized' || code === 'storage/unauthenticated' || code === 'storage/bucket-not-found' || code === 'storage/project-not-found') break;
+      if(code === 'storage/unauthorized' || code === 'storage/unauthenticated') break;
       if(!firebaseReady || !firebaseStorageRef) break;
     }
   }
@@ -3196,14 +3209,14 @@ function dataUrlToBlob(u){
   for(let k = 0; k < bin.length; k++) arr[k] = bin.charCodeAt(k);
   return new Blob([arr], { type: mime });
 }
-async function uploadDataUrlToStorageOnce(dataUrl, folder, id){
+async function uploadDataUrlToStorageOnce(dataUrl, folder, id, storageRef){
   if(!firebaseReady || !firebaseStorageRef) throw new Error('Firebase Storage başlatılamadı');
   await withTimeout(firebaseAuthReadyPromise, 10000, 'Firebase girişi zaman aşımına uğradı');
   const m = /^data:([^;,]+)[;,]/.exec(dataUrl);
   const type = m ? m[1] : 'image/jpeg';
   const ext = ({'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif','image/svg+xml':'svg'})[type] || 'jpg';
   const safeId = String(id).replace(/[^a-zA-Z0-9_-]/g,'-');
-  const ref = firebaseStorageRef.child(folder + '/' + safeId + '-' + Date.now().toString(36) + '.' + ext);
+  const ref = (storageRef || firebaseStorageRef).child(folder + '/' + safeId + '-' + Date.now().toString(36) + '.' + ext);
   const meta = { contentType:type, cacheControl:'public,max-age=31536000' };
   // Blob olarak yükle (base64 string yüklemesinden daha kararlı, telefonlarda daha az bellek kullanır)
   let blob = null;
