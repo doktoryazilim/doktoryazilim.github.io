@@ -559,7 +559,7 @@ try{
     ordersColRef = firebase.firestore().collection('kdr_orders');
     productsColRef = firebase.firestore().collection('kdr_products');
     firebaseReady = true;
-    try{ const _st = firebase.storage(); try{ _st.setMaxUploadRetryTime(8000); _st.setMaxOperationRetryTime(8000); }catch(_e){} firebaseStorageRef = _st.ref(); }catch(e){ console.error('Firebase Storage başlatma hatası (Storage etkinleştirilmemiş olabilir):', e); }
+    try{ const _st = firebase.storage(); try{ _st.setMaxUploadRetryTime(30000); _st.setMaxOperationRetryTime(15000); }catch(_e){} firebaseStorageRef = _st.ref(); }catch(e){ console.error('Firebase Storage başlatma hatası (Storage etkinleştirilmemiş olabilir):', e); }
     firebase.auth().onAuthStateChanged(function(user){
       if(user){ resolveAuthReady(); }
       else{
@@ -2713,7 +2713,7 @@ async function saveProductImpl(editing){
       try{ image = await uploadDataUrlToStorage(image, 'products', newId || editing); }
       catch(e){
         console.error('Storage yükleme hatası', e);
-        STORAGE_DOWN_UNTIL = Date.now() + 5*60*1000;
+        STORAGE_DOWN_UNTIL = Date.now() + 45*1000;
         showToast('Fotoğraf Storage\'a yüklenemedi, veritabanına gömülü kaydediliyor');
       }
     }
@@ -3146,11 +3146,26 @@ function withTimeout(promise, ms, msg){
     promise.then(function(v){ clearTimeout(t); resolve(v); }, function(e){ clearTimeout(t); reject(e); });
   });
 }
-const STORAGE_UPLOAD_TIMEOUT_MS = 6000;
+const STORAGE_UPLOAD_TIMEOUT_MS = 15000; // taban süre; büyük dosyalarda boyuta göre uzar
 let STORAGE_DOWN_UNTIL = 0; // Storage yanıt vermezse kısa süre denemeyi bırak, fotoğraf doğrudan gömülsün
 async function uploadDataUrlToStorage(dataUrl, folder, id){
+  // Yavaş/kararsız bağlantıda tek deneme bazen zaman aşımına uğruyordu: geçici hatalarda 2 kez dene.
+  // Yetki/kural hatalarında (kalıcı) tekrar denemenin anlamı yok.
+  let lastErr;
+  for(let attempt = 0; attempt < 2; attempt++){
+    try{ return await uploadDataUrlToStorageOnce(dataUrl, folder, id); }
+    catch(e){
+      lastErr = e;
+      const code = String((e && e.code) || '');
+      if(code === 'storage/unauthorized' || code === 'storage/unauthenticated' || code === 'storage/bucket-not-found' || code === 'storage/project-not-found') break;
+      if(!firebaseReady || !firebaseStorageRef) break;
+    }
+  }
+  throw lastErr;
+}
+async function uploadDataUrlToStorageOnce(dataUrl, folder, id){
   if(!firebaseReady || !firebaseStorageRef) throw new Error('Firebase Storage başlatılamadı');
-  await withTimeout(firebaseAuthReadyPromise, 5000, 'Firebase girişi zaman aşımına uğradı');
+  await withTimeout(firebaseAuthReadyPromise, 10000, 'Firebase girişi zaman aşımına uğradı');
   const m = /^data:([^;,]+)[;,]/.exec(dataUrl);
   const type = m ? m[1] : 'image/jpeg';
   const ext = ({'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif','image/svg+xml':'svg'})[type] || 'jpg';
@@ -3158,9 +3173,9 @@ async function uploadDataUrlToStorage(dataUrl, folder, id){
   const ref = firebaseStorageRef.child(folder + '/' + safeId + '-' + Date.now().toString(36) + '.' + ext);
   const task = ref.putString(dataUrl, 'data_url', { contentType:type, cacheControl:'public,max-age=31536000' });
   let snap;
-  try{ snap = await withTimeout(task, STORAGE_UPLOAD_TIMEOUT_MS, 'Storage yanıt vermedi (etkin değil ya da kurallar yazmaya izin vermiyor olabilir)'); }
+  try{ snap = await withTimeout(task, Math.min(45000, STORAGE_UPLOAD_TIMEOUT_MS + Math.round(dataUrl.length / 1024) * 25), 'Storage yanıt vermedi (etkin değil ya da kurallar yazmaya izin vermiyor olabilir)'); }
   catch(e){ try{ task.cancel(); }catch(_){} throw e; }
-  return await withTimeout(snap.ref.getDownloadURL(), 8000, 'Görsel adresi alınamadı');
+  return await withTimeout(snap.ref.getDownloadURL(), 15000, 'Görsel adresi alınamadı');
 }
 // Base64 görseli (sadece JPEG fotoğrafları) ~120KB / 1100px'e indirir; PNG'lere dokunmaz (şeffaflık bozulmasın).
 function shrinkJpegDataUrl(dataUrl){
