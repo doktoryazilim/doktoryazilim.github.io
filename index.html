@@ -531,8 +531,6 @@ let heroDocRef = null;
 let promosDocRef = null;
 let categoriesDocRef = null;
 let firebaseStorageRef = null;
-let firebaseStorageAltRef = null; // diğer olası bucket adı (.appspot.com <-> .firebasestorage.app)
-let PREFER_ALT_BUCKET = false;
 let ordersColRef = null;
 let productsColRef = null;
 /* Bulutta (kdr_products) EN SON gördüğümüz ürün hâli: id -> JSON. Kayıt sırasında sadece
@@ -561,14 +559,7 @@ try{
     ordersColRef = firebase.firestore().collection('kdr_orders');
     productsColRef = firebase.firestore().collection('kdr_products');
     firebaseReady = true;
-    try{ const _st = firebase.storage(); try{ _st.setMaxUploadRetryTime(12000); _st.setMaxOperationRetryTime(12000); }catch(_e){} firebaseStorageRef = _st.ref(); }catch(e){ console.error('Firebase Storage başlatma hatası (Storage etkinleştirilmemiş olabilir):', e); }
-    try{
-      const _b = firebaseConfig.storageBucket || '', _pid = firebaseConfig.projectId;
-      let _alt = null;
-      if(/firebasestorage\.app$/.test(_b)) _alt = _pid + '.appspot.com';
-      else if(/appspot\.com$/.test(_b)) _alt = _pid + '.firebasestorage.app';
-      if(_alt){ const _s2 = firebase.app().storage('gs://' + _alt); try{ _s2.setMaxUploadRetryTime(12000); _s2.setMaxOperationRetryTime(12000); }catch(_e){} firebaseStorageAltRef = _s2.ref(); }
-    }catch(e){ console.warn('Alternatif bucket hazırlanamadı', e); }
+    try{ const _st = firebase.storage(); try{ _st.setMaxUploadRetryTime(8000); _st.setMaxOperationRetryTime(8000); }catch(_e){} firebaseStorageRef = _st.ref(); }catch(e){ console.error('Firebase Storage başlatma hatası (Storage etkinleştirilmemiş olabilir):', e); }
     firebase.auth().onAuthStateChanged(function(user){
       if(user){ resolveAuthReady(); }
       else{
@@ -894,6 +885,12 @@ async function storageGet(key, shared){
         if(mainSnap.exists && mainSnap.data().value){
           const obj = JSON.parse(mainSnap.data().value);
           obj.products = prodSnap.docs.map(d=>d.data());
+          // Firestore koleksiyonu belge ID'sine (rastgele uuid) göre döner; sıra bilgisi
+          // saklanmadığı için yeni eklenen ürün sayfa yenilenince rastgele bir yere
+          // düşüyordu ("kaydetmiyor" gibi görünmesinin sebebi). Artık ekleme zamanına
+          // (addedAt) göre yeni -> eski sıralanıyor; addedAt'ı olmayan eski ürünler
+          // kendi aralarındaki mevcut sırayı koruyarak listenin sonunda kalır.
+          obj.products.sort(function(a,b){ return (Number(b.addedAt)||0) - (Number(a.addedAt)||0); });
           try{
             PRODUCT_BASELINE = new Map(obj.products.map(function(pr){ return [String(pr.id), JSON.stringify(pr)]; }));
             PRODUCT_BASELINE_READY = true;
@@ -920,7 +917,6 @@ async function storageGet(key, shared){
 async function storageSet(key, value, shared){
   let ok = false;
   let cloudError = null;
-  window.__lastSaveErr = null; window.__lastSaveLocalErr = null; // başarısızlık nedenini kullanıcıya gösterebilmek için
   try{
     if(window.storage && typeof window.storage.set==='function'){
       const r = await window.storage.set(key, value, shared);
@@ -994,12 +990,12 @@ async function storageSet(key, value, shared){
         await storeDocRef.set({ value: value, updatedAt: Date.now() });
       }
       ok = true;
-    }catch(e){ console.error('Firestore yazma hatası', e); cloudError = e; window.__lastSaveErr = e; }
+    }catch(e){ console.error('Firestore yazma hatası', e); cloudError = e; }
   }
   try{
     localStorage.setItem(CACHE_NS+(shared?'kdr_shared_':'kdr_local_')+key, value);
     ok = true;
-  }catch(e){ /* storage full or unavailable */ window.__lastSaveLocalErr = e; }
+  }catch(e){ /* storage full or unavailable */ }
   return ok ? {key, value, shared, cloudError} : null;
 }
 
@@ -1225,7 +1221,7 @@ async function fastCatalogStart(){
     const token = await withTimeout(user.getIdToken(), 6000, 'token');
     const base = 'https://firestore.googleapis.com/v1/projects/' + encodeURIComponent(firebaseConfig.projectId) + '/databases/(default)/documents/kdr_products';
     const headers = { Authorization: 'Bearer ' + token };
-    const mask = ['id','name','category','price','salePrice','isNew','featured','stock','onSale'].map(function(f){ return 'mask.fieldPaths=' + f; }).join('&');
+    const mask = ['id','name','category','price','salePrice','isNew','featured','stock','onSale','addedAt'].map(function(f){ return 'mask.fieldPaths=' + f; }).join('&');
     let docs = [], pageToken = '', guard = 0;
     do{
       const url = base + '?pageSize=300&' + mask + (pageToken ? '&pageToken=' + encodeURIComponent(pageToken) : '');
@@ -1238,6 +1234,7 @@ async function fastCatalogStart(){
     if(!CATALOG_LOADING) return; // tam veri zaten geldi: kısmi veriye gerek yok
     const prods = docs.map(function(d){ const o = {}; const f = d.fields || {}; for(const k in f) o[k] = fsValue(f[k]); return o; }).filter(function(x){ return x && x.id; });
     if(!prods.length) return;
+    prods.sort(function(a,b){ return (Number(b.addedAt)||0) - (Number(a.addedAt)||0); });
     DATA.products = prods;
     PARTIAL_CATALOG = true;
     CATALOG_LOADING = false;
@@ -1332,25 +1329,21 @@ async function loadData(){
   startOrdersColWatcher();
 }
 async function saveData(){
-  if(PARTIAL_CATALOG){ showToast('Site hâlâ yükleniyor, birkaç saniye sonra tekrar deneyin'); return; }
+  if(PARTIAL_CATALOG){ showToast('Site hâlâ yükleniyor, birkaç saniye sonra tekrar deneyin'); return false; }
   try{
     const json = JSON.stringify(DATA);
     const result = await storageSet(STORAGE_KEY, json, true);
-    if(!result){
-      const ce = window.__lastSaveErr, le = window.__lastSaveLocalErr;
-      showToast('Kaydetme başarısız oldu, tekrar deneyin.'
-        + (ce ? ' Bulut: ' + String(ce.code || ce.message || ce).slice(0,90) : '')
-        + (le ? ' | Tarayıcı belleği: ' + String(le.name || le.message || le).slice(0,40) : ''), 9000);
-    }
-    else if(result.cloudError){
+    if(!result){ showToast('Kaydedilemedi (bulut ve yerel kayıt başarısız)'); return false; }
+    if(result.cloudError){
       // Yerelde kaydedildi ama buluta (Firestore'a) yazılamadı — bu durumda başka bir
-      // cihaz/tarayıcı bu değişikliği GÖRMEZ, o yüzden kullanıcıyı açıkça uyarıyoruz
-      // (önceden bu sessizce yutuluyordu ve sorun fark edilemiyordu).
+      // cihaz/tarayıcı bu değişikliği GÖRMEZ, o yüzden kullanıcıyı açıkça uyarıyoruz.
       const msg = String(result.cloudError.message||result.cloudError);
       showToast('Bulut kaydı başarısız: ' + msg.slice(0,120));
+      return false;
     }
+    return true;
   }
-  catch(e){ console.error('save failed', e); showToast('Kaydetme hatası'); }
+  catch(e){ console.error('save failed', e); showToast('Kaydetme hatası'); return false; }
 }
 // Hafif kayıt: sadece yerel önbelleği anında yazar, buluta ise yalnızca ana dokümanı
 // (müşteriler dahil, ürün/hero/promo/kategori HARİÇ) arka planda yazar. Ürün koleksiyonunu
@@ -1443,11 +1436,11 @@ function catColor(id){ return CAT_COLORS[id] || '#eef1f5'; }
 function esc(s){ return (s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 function formatDate(iso){ const d=new Date(iso); return d.toLocaleDateString('tr-TR')+' '+d.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'}); }
 
-function showToast(msg, ms){
+function showToast(msg){
   const t = document.createElement('div');
   t.className='toast'; t.textContent=msg;
   document.body.appendChild(t);
-  setTimeout(()=>t.remove(), ms || 2400);
+  setTimeout(()=>t.remove(), 2400);
 }
 
 /* ---------- uygulama içi onay penceresi: tarayıcının native confirm()'i yerine ---------- */
@@ -2580,7 +2573,7 @@ function adminOverview(){
     <h3>Hızlı İşlemler</h3>
     <div class="hint">Sık kullanılan yönetim işlemlerine buradan ulaşın.</div>
     <div style="display:flex; gap:10px; flex-wrap:wrap;">
-      <button class="btn small" onclick="adminOpenProductForm('new')">+ Yeni Ürün Ekle</button>
+      <button class="btn small" onclick="ADMIN.tab='urunler'; ADMIN.editingProduct='new'; render();">+ Yeni Ürün Ekle</button>
       <button class="btn small outline" onclick="setAdminTab('siparisler')">Siparişleri Gör</button>
       <button class="btn small outline" onclick="setAdminTab('banner')">Hero Banner'ı Düzenle</button>
     </div>
@@ -2611,23 +2604,25 @@ function prodManageCard(p){
       <div class="pmc-price">${priceHtml}</div>
       ${stockHtml}
       <div class="pmc-actions">
-        <button onclick="adminOpenProductForm('${p.id}')">Düzenle</button>
+        <button onclick="editProduct('${p.id}')">Düzenle</button>
         <button class="danger" onclick="deleteProduct('${p.id}')">Sil</button>
       </div>
     </div>
   </div>`;
 }
 
-// Düzenle / Yeni Ürün: form listenin en üstünde açılıyor. render() yönetim panelinin kaydırma
-// konumunu korduğu için, listede aşağıdayken tıklanınca form görünmüyordu ("çalışmıyor" sanılıyordu).
-function adminOpenProductForm(id){
-  ADMIN.tab = 'urunler'; ADMIN.editingProduct = id; render();
-  const m = document.querySelector('.admin-main'); if(m) m.scrollTop = 0;
-  window.scrollTo(0, 0);
+function editProduct(id){
+  ADMIN.tab = 'urunler';
+  ADMIN.editingProduct = String(id);
+  render();
+  // Form panelin en üstünde açılıyor; panelin kendi kaydırmasını da başa al ki görünsün
+  const m = document.querySelector('.admin-main');
+  if(m) m.scrollTop = 0;
+  window.scrollTo(0,0);
 }
 function adminProducts(){
   const editing = ADMIN.editingProduct;
-  const prod = editing ? (editing==='new' ? {id:'',name:'',category:DATA.categories[0].id,price:'',salePrice:'',image:'',isNew:false,featured:false,stock:null} : DATA.products.find(p=>p.id===editing)) : null;
+  const prod = editing ? (editing==='new' ? {id:'',name:'',category:DATA.categories[0].id,price:'',salePrice:'',image:'',isNew:false,featured:false,stock:null} : DATA.products.find(p=>String(p.id)===String(editing))) : null;
   const formHtml = prod ? `
   <div class="panel">
     <h3>${editing==='new'?'Yeni Ürün Ekle':'Ürünü Düzenle'}</h3>
@@ -2664,7 +2659,7 @@ function adminProducts(){
       <div><h3 style="margin-bottom:2px;">Tüm Ürünler (${DATA.products.length})</h3><div class="hint" style="margin-bottom:0;">Fiyat, fotoğraf ve etiketleri buradan yönetin.</div></div>
     </div>
     <div class="prod-grid">
-      <div class="add-card" onclick="adminOpenProductForm('new')"><div class="plus">+</div>Yeni Ürün Ekle</div>
+      <div class="add-card" onclick="ADMIN.editingProduct='new'; render(); window.scrollTo(0,0);"><div class="plus">+</div>Yeni Ürün Ekle</div>
       ${DATA.products.map(prodManageCard).join('')}
     </div>
   </div>`;
@@ -2710,16 +2705,9 @@ let SAVING_PRODUCT = false;
 async function saveProduct(editing){
   if(SAVING_PRODUCT) return; // çift tıklamada aynı ürün iki kez eklenmesin
   SAVING_PRODUCT = true;
-  // Fotoğraf yüklenirken düğme "çalışmıyor" gibi görünmesin: görünür geri bildirim ver
-  const btn = document.querySelector('button[onclick^="saveProduct("]');
-  const btnLabel = btn ? btn.textContent : '';
-  if(btn){ btn.disabled = true; btn.textContent = 'Kaydediliyor...'; }
   try{ await saveProductImpl(editing); }
   catch(e){ console.error('Ürün kaydetme hatası', e); showToast('Ürün kaydedilemedi: ' + String((e && e.message) || e).slice(0,100)); }
-  finally{
-    SAVING_PRODUCT = false;
-    if(btn && document.body.contains(btn)){ btn.disabled = false; btn.textContent = btnLabel; }
-  }
+  finally{ SAVING_PRODUCT = false; }
 }
 async function saveProductImpl(editing){
   const name = document.getElementById('f-name').value.trim();
@@ -2735,25 +2723,20 @@ async function saveProductImpl(editing){
   if(!name){ showToast('Lütfen ürün adı girin'); return; }
   if(document.getElementById('f-onsale').checked && !salePrice){ showToast('İndirimli için önce Fiyat (₺) alanını doldurun'); return; }
   const newId = (editing==='new') ? uuid() : null;
-  if(isDataUrl(image)){
-    if(Date.now() < STORAGE_DOWN_UNTIL){
-      // Storage kısa süre önce yanıt vermedi: bekletmeden doğrudan veritabanına gömülü kaydet
-      try{ image = await shrinkJpegDataUrl(image); }catch(_s){}
-    } else {
-      showToast('Fotoğraf yükleniyor...');
-      try{ image = await uploadDataUrlToStorage(image, 'products', newId || editing); }
-      catch(e){
-        console.error('Storage yükleme hatası', e);
-        STORAGE_DOWN_UNTIL = Date.now() + 45*1000;
-        try{ image = await shrinkJpegDataUrl(image); }catch(_s){} // gömülecekse küçük olsun
-        showToast('Fotoğraf Storage\'a yüklenemedi, veritabanına gömülü kaydediliyor. Hata: ' + String((e && (e.code || e.message)) || e).slice(0,110), 7000);
-      }
-    }
+  // Fotoğraf zaten tarayıcıda küçültülüp (~50KB) hazır; Storage'a yükleme denemesi
+  // beklemeye yol açtığı için kaldırıldı, fotoğraf doğrudan ürünle birlikte kaydedilir.
+  if(editing==='new'){ DATA.products.unshift({ id:newId, name, category, price, salePrice, image, isNew, featured, stock, addedAt:Date.now() }); }
+  else {
+    const p = DATA.products.find(p=>String(p.id)===String(editing));
+    if(!p){ showToast('Ürün bulunamadı, sayfayı yenileyip tekrar deneyin'); return; }
+    Object.assign(p, {name, category, price, salePrice, image, isNew, featured, stock});
   }
-  if(editing==='new'){ DATA.products.unshift({ id:newId, name, category, price, salePrice, image, isNew, featured, stock }); }
-  else { const p = DATA.products.find(p=>p.id===editing); Object.assign(p, {name, category, price, salePrice, image, isNew, featured, stock}); }
   ADMIN.editingProduct = null;
-  saveData(); render(); showToast('Ürün kaydedildi');
+  render();
+  showToast('Kaydediliyor...');
+  // "Kaydedildi" mesajı artık buluta yazma gerçekten bitince gösterilir
+  const ok = await saveData();
+  if(ok) showToast('Ürün kaydedildi ✓');
 }
 async function deleteProduct(id){
   if(!(await appConfirm('Bu ürünü silmek istediğinize emin misiniz?', 'Sil'))) return;
@@ -3178,61 +3161,21 @@ function withTimeout(promise, ms, msg){
     promise.then(function(v){ clearTimeout(t); resolve(v); }, function(e){ clearTimeout(t); reject(e); });
   });
 }
-const STORAGE_UPLOAD_TIMEOUT_MS = 15000; // taban süre; büyük dosyalarda boyuta göre uzar
+const STORAGE_UPLOAD_TIMEOUT_MS = 6000;
 let STORAGE_DOWN_UNTIL = 0; // Storage yanıt vermezse kısa süre denemeyi bırak, fotoğraf doğrudan gömülsün
 async function uploadDataUrlToStorage(dataUrl, folder, id){
-  // Yavaş/kararsız bağlantıda tek deneme bazen zaman aşımına uğruyordu: geçici hatalarda 2 kez dene.
-  // Yetki/kural hatalarında (kalıcı) tekrar denemenin anlamı yok.
-  let lastErr;
-  for(let attempt = 0; attempt < 3; attempt++){
-    if(attempt > 0) await new Promise(function(r){ setTimeout(r, 1500 * attempt); });
-    // Bucket adı yanlışsa (tarayıcı CORS/ERR_FAILED verir) sırayla öbür adı da dene
-    const order = PREFER_ALT_BUCKET && firebaseStorageAltRef ? [firebaseStorageAltRef, firebaseStorageRef, firebaseStorageAltRef]
-                                                              : [firebaseStorageRef, firebaseStorageAltRef || firebaseStorageRef, firebaseStorageRef];
-    const useRef = order[attempt];
-    try{ const url = await uploadDataUrlToStorageOnce(dataUrl, folder, id, useRef); PREFER_ALT_BUCKET = (useRef === firebaseStorageAltRef && useRef !== firebaseStorageRef); return url; }
-    catch(e){
-      lastErr = e;
-      console.warn('Storage yükleme denemesi başarısız (' + (attempt + 1) + '/3)', e);
-      const code = String((e && e.code) || '');
-      if(code === 'storage/unauthorized' || code === 'storage/unauthenticated') break;
-      if(!firebaseReady || !firebaseStorageRef) break;
-    }
-  }
-  throw lastErr;
-}
-function dataUrlToBlob(u){
-  const i = u.indexOf(','), head = u.slice(0, i), body = u.slice(i + 1);
-  const mime = (/^data:([^;,]+)/.exec(head) || [])[1] || 'image/jpeg';
-  const bin = /;base64/i.test(head) ? atob(body) : decodeURIComponent(body);
-  const arr = new Uint8Array(bin.length);
-  for(let k = 0; k < bin.length; k++) arr[k] = bin.charCodeAt(k);
-  return new Blob([arr], { type: mime });
-}
-async function uploadDataUrlToStorageOnce(dataUrl, folder, id, storageRef){
   if(!firebaseReady || !firebaseStorageRef) throw new Error('Firebase Storage başlatılamadı');
-  await withTimeout(firebaseAuthReadyPromise, 10000, 'Firebase girişi zaman aşımına uğradı');
+  await withTimeout(firebaseAuthReadyPromise, 5000, 'Firebase girişi zaman aşımına uğradı');
   const m = /^data:([^;,]+)[;,]/.exec(dataUrl);
   const type = m ? m[1] : 'image/jpeg';
   const ext = ({'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif','image/svg+xml':'svg'})[type] || 'jpg';
   const safeId = String(id).replace(/[^a-zA-Z0-9_-]/g,'-');
-  const ref = (storageRef || firebaseStorageRef).child(folder + '/' + safeId + '-' + Date.now().toString(36) + '.' + ext);
-  const meta = { contentType:type, cacheControl:'public,max-age=31536000' };
-  // Blob olarak yükle (base64 string yüklemesinden daha kararlı, telefonlarda daha az bellek kullanır)
-  let blob = null;
-  try{ blob = dataUrlToBlob(dataUrl); }catch(_e){ blob = null; }
-  const task = blob ? ref.put(blob, meta) : ref.putString(dataUrl, 'data_url', meta);
-  // Toplam süre yerine "takılma" süresine bak: yavaş ama ilerleyen yükleme iptal edilmesin
-  const snap = await new Promise(function(resolve, reject){
-    let stall, total, finished = false;
-    function end(fn, v){ if(finished) return; finished = true; clearTimeout(stall); clearTimeout(total); fn(v); }
-    function fail(e){ try{ task.cancel(); }catch(_){} end(reject, e); }
-    function arm(){ clearTimeout(stall); stall = setTimeout(function(){ fail(new Error('Storage yanıt vermedi (etkin değil ya da kurallar yazmaya izin vermiyor olabilir)')); }, 20000); }
-    total = setTimeout(function(){ fail(new Error('Yükleme çok uzun sürdü')); }, 90000);
-    arm();
-    task.on('state_changed', arm, function(err){ end(reject, err); }, function(){ end(resolve, task.snapshot); });
-  });
-  return await withTimeout(snap.ref.getDownloadURL(), 15000, 'Görsel adresi alınamadı');
+  const ref = firebaseStorageRef.child(folder + '/' + safeId + '-' + Date.now().toString(36) + '.' + ext);
+  const task = ref.putString(dataUrl, 'data_url', { contentType:type, cacheControl:'public,max-age=31536000' });
+  let snap;
+  try{ snap = await withTimeout(task, STORAGE_UPLOAD_TIMEOUT_MS, 'Storage yanıt vermedi (etkin değil ya da kurallar yazmaya izin vermiyor olabilir)'); }
+  catch(e){ try{ task.cancel(); }catch(_){} throw e; }
+  return await withTimeout(snap.ref.getDownloadURL(), 8000, 'Görsel adresi alınamadı');
 }
 // Base64 görseli (sadece JPEG fotoğrafları) ~120KB / 1100px'e indirir; PNG'lere dokunmaz (şeffaflık bozulmasın).
 function shrinkJpegDataUrl(dataUrl){
@@ -3580,7 +3523,7 @@ if('serviceWorker' in navigator){
           autoDisplay: false
         }, 'google_translate_element');
       }catch(e){ console.warn('Çeviri başlatılamadı', e); }
-      waitCombo(function(c){ setTimeout(function(){ var q = queue.slice(); queue = []; q.forEach(function(code){ applyCombo(findCombo() || c, code); }); }, 500); }, 0);
+      waitCombo(function(c){ var q = queue.slice(); queue = []; q.forEach(function(code){ applyCombo(c, code); }); }, 0);
     };
     var sc = document.createElement('script');
     sc.src = 'https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit';
@@ -3588,22 +3531,7 @@ if('serviceWorker' in navigator){
     sc.onerror = function(){ gtLoading = false; console.warn('Google Translate yüklenemedi'); };
     document.head.appendChild(sc);
   }
-  function applyCombo(c, code, n){
-    n = n || 0;
-    c.value = code; c.dispatchEvent(new Event('change'));
-    // İlk denemede Google henüz hazır olmayabilir: çeviri gerçekten uygulanmadıysa tekrar dene
-    setTimeout(function(){
-      if(window.fdLangCode !== code) return; // kullanıcı bu arada başka dil seçti
-      var cc = findCombo() || c;
-      var done = /translated-(ltr|rtl)/.test(document.documentElement.className) && cc.value === code;
-      if(!done && n < 5) applyCombo(cc, code, n + 1);
-    }, 700);
-  }
-  function setCookie(code){
-    var v = '/' + PAGE + '/' + code, parts = location.hostname.split('.');
-    document.cookie = 'googtrans=' + v + '; path=/';
-    if(parts.length > 1) document.cookie = 'googtrans=' + v + '; path=/; domain=.' + parts.slice(-2).join('.');
-  }
+  function applyCombo(c, code){ c.value = code; c.dispatchEvent(new Event('change')); }
   function clearCookies(){
     var past = 'expires=Thu, 01 Jan 1970 00:00:00 GMT';
     var host = location.hostname, parts = host.split('.'), doms = [host];
@@ -3612,7 +3540,6 @@ if('serviceWorker' in navigator){
     doms.forEach(function(d){ document.cookie = 'googtrans=; ' + past + '; path=/; domain=' + d; });
   }
   function translateTo(code){
-    setCookie(code); // widget ilk yüklenişte dili çerezden okur, ilk seçimde de çalışır
     var c = findCombo();
     if(c) applyCombo(c, code);
     else { queue = [code]; loadGT(); }
