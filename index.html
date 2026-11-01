@@ -2565,7 +2565,7 @@ function adminOverview(){
     <h3>Hızlı İşlemler</h3>
     <div class="hint">Sık kullanılan yönetim işlemlerine buradan ulaşın.</div>
     <div style="display:flex; gap:10px; flex-wrap:wrap;">
-      <button class="btn small" onclick="ADMIN.tab='urunler'; ADMIN.editingProduct='new'; render();">+ Yeni Ürün Ekle</button>
+      <button class="btn small" onclick="adminOpenProductForm('new')">+ Yeni Ürün Ekle</button>
       <button class="btn small outline" onclick="setAdminTab('siparisler')">Siparişleri Gör</button>
       <button class="btn small outline" onclick="setAdminTab('banner')">Hero Banner'ı Düzenle</button>
     </div>
@@ -2596,13 +2596,20 @@ function prodManageCard(p){
       <div class="pmc-price">${priceHtml}</div>
       ${stockHtml}
       <div class="pmc-actions">
-        <button onclick="ADMIN.tab='urunler'; ADMIN.editingProduct='${p.id}'; render(); window.scrollTo(0,0);">Düzenle</button>
+        <button onclick="adminOpenProductForm('${p.id}')">Düzenle</button>
         <button class="danger" onclick="deleteProduct('${p.id}')">Sil</button>
       </div>
     </div>
   </div>`;
 }
 
+// Düzenle / Yeni Ürün: form listenin en üstünde açılıyor. render() yönetim panelinin kaydırma
+// konumunu korduğu için, listede aşağıdayken tıklanınca form görünmüyordu ("çalışmıyor" sanılıyordu).
+function adminOpenProductForm(id){
+  ADMIN.tab = 'urunler'; ADMIN.editingProduct = id; render();
+  const m = document.querySelector('.admin-main'); if(m) m.scrollTop = 0;
+  window.scrollTo(0, 0);
+}
 function adminProducts(){
   const editing = ADMIN.editingProduct;
   const prod = editing ? (editing==='new' ? {id:'',name:'',category:DATA.categories[0].id,price:'',salePrice:'',image:'',isNew:false,featured:false,stock:null} : DATA.products.find(p=>p.id===editing)) : null;
@@ -2642,7 +2649,7 @@ function adminProducts(){
       <div><h3 style="margin-bottom:2px;">Tüm Ürünler (${DATA.products.length})</h3><div class="hint" style="margin-bottom:0;">Fiyat, fotoğraf ve etiketleri buradan yönetin.</div></div>
     </div>
     <div class="prod-grid">
-      <div class="add-card" onclick="ADMIN.editingProduct='new'; render(); window.scrollTo(0,0);"><div class="plus">+</div>Yeni Ürün Ekle</div>
+      <div class="add-card" onclick="adminOpenProductForm('new')"><div class="plus">+</div>Yeni Ürün Ekle</div>
       ${DATA.products.map(prodManageCard).join('')}
     </div>
   </div>`;
