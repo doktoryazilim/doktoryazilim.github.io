@@ -71,10 +71,10 @@
 
   .wrap{max-width:1280px; margin:0 auto; padding:0 24px;}
   .announce{background:linear-gradient(90deg,var(--amber),var(--amber-light)); color:#fff; font-size:13px; font-weight:700; padding:10px 0; overflow:hidden; white-space:nowrap; position:relative;}
-  .announce-track{display:inline-flex; align-items:center; margin-left:50%; animation:announceScroll 18s linear infinite;}
+  .announce-track{display:inline-flex; align-items:center; padding-left:100%; animation:announceScroll 32s linear infinite;}
   .announce:hover .announce-track{animation-play-state:paused;}
   .announce-track span{padding:0 40px; display:inline-block;}
-  @keyframes announceScroll{from{transform:translateX(0);} to{transform:translateX(-50%);}}
+  @keyframes announceScroll{from{transform:translateX(0);} to{transform:translateX(-100%);}}
   header.site{position:sticky; top:0; z-index:40; background:rgba(255,255,255,.92); backdrop-filter:blur(12px); border-bottom:1px solid var(--line);}
   .header-row{display:flex; align-items:center; justify-content:space-between; padding:16px 24px; gap:20px; flex-wrap:wrap;}
   .logo{display:flex; align-items:center; gap:11px; font-size:21px; font-weight:700; cursor:pointer;}
@@ -1801,7 +1801,7 @@ function logoMarkup(size){
 function headerHtml(){
   const cc = cartCount();
   return `
-  ${DATA.announcementEnabled !== false ? `<div class="announce"><div class="announce-track"><span>${esc(DATA.announcement)}</span><span>${esc(DATA.announcement)}</span></div></div>` : ''}
+  ${DATA.announcementEnabled !== false ? `<div class="announce"><div class="announce-track"><span>${esc(DATA.announcement)}</span></div></div>` : ''}
   <header class="site">
     <div class="header-row">
       <div class="logo" onclick="goHome()">
