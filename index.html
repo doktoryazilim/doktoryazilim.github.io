@@ -2362,8 +2362,26 @@ function addToCart(id, qty){
     return;
   }
   if(existing) existing.qty += qty; else CART.push({productId:id, qty});
+  // Ürün penceresi/sepet açık değilse (ör. liste kartındaki "Sepete Ekle") tüm sayfayı
+  // yeniden çizmek ekranın yanıp sönmesine yol açıyordu; sadece sepet rozetini güncelle.
+  const needFullRender = !!VIEW.product || !!VIEW.cartOpen;
   VIEW.product = null;
-  saveCart(); render(); showToast('Sepete eklendi');
+  saveCart();
+  if(needFullRender) render(); else updateCartBadge();
+  showToast('Sepete eklendi');
+}
+function updateCartBadge(){
+  const btn = document.querySelector('header.site .ico-cart');
+  if(!btn){ render(); return; }
+  const old = btn.querySelector('.cart-badge');
+  if(old) old.remove();
+  const cc = cartCount();
+  if(cc>0){
+    const sp = document.createElement('span');
+    sp.className = 'cart-badge';
+    sp.textContent = cc;
+    btn.appendChild(sp);
+  }
 }
 function removeFromCart(id){ CART = CART.filter(c=>c.productId!==id); saveCart(); render(); }
 function changeQty(id, delta){
