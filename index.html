@@ -1464,45 +1464,81 @@ function esc(s){ return (s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 function formatDate(iso){ const d=new Date(iso); return d.toLocaleDateString('tr-TR')+' '+d.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'}); }
 
 const TOAST_TR_CACHE = {};
+function toastFetchJson(url, ms){
+  const ctrl = (typeof AbortController!=='undefined') ? new AbortController() : null;
+  const timer = setTimeout(()=>{ try{ ctrl && ctrl.abort(); }catch(e){} }, ms);
+  return fetch(url, ctrl ? {signal:ctrl.signal} : undefined)
+    .then(r=>r.json())
+    .then(j=>{ clearTimeout(timer); return j; })
+    .catch(e=>{ clearTimeout(timer); throw e; });
+}
+const TOAST_DICT = {
+  en:{'Sepete eklendi':'Added to cart','Bu ürün stokta yok':'This product is out of stock','Siparişiniz alındı! "Siparişlerim" bölümünden takip edebilirsiniz.':'Your order has been received! You can track it in the "My Orders" section.','Siparişiniz alındı! Sipariş takibi için hesap oluşturabilirsiniz.':'Your order has been received! You can create an account to track your order.'},
+  de:{'Sepete eklendi':'Zum Warenkorb hinzugefügt','Bu ürün stokta yok':'Dieses Produkt ist nicht auf Lager','Siparişiniz alındı! "Siparişlerim" bölümünden takip edebilirsiniz.':'Ihre Bestellung ist eingegangen! Sie können sie unter „Meine Bestellungen“ verfolgen.','Siparişiniz alındı! Sipariş takibi için hesap oluşturabilirsiniz.':'Ihre Bestellung ist eingegangen! Sie können ein Konto erstellen, um Ihre Bestellung zu verfolgen.'},
+  fr:{'Sepete eklendi':'Ajouté au panier','Bu ürün stokta yok':'Ce produit est en rupture de stock','Siparişiniz alındı! "Siparişlerim" bölümünden takip edebilirsiniz.':'Votre commande a été reçue ! Vous pouvez la suivre dans la section « Mes commandes ».','Siparişiniz alındı! Sipariş takibi için hesap oluşturabilirsiniz.':'Votre commande a été reçue ! Vous pouvez créer un compte pour la suivre.'},
+  es:{'Sepete eklendi':'Añadido al carrito','Bu ürün stokta yok':'Este producto está agotado','Siparişiniz alındı! "Siparişlerim" bölümünden takip edebilirsiniz.':'¡Hemos recibido su pedido! Puede seguirlo en la sección «Mis pedidos».','Siparişiniz alındı! Sipariş takibi için hesap oluşturabilirsiniz.':'¡Hemos recibido su pedido! Puede crear una cuenta para seguirlo.'},
+  ru:{'Sepete eklendi':'Добавлено в корзину','Bu ürün stokta yok':'Товара нет в наличии','Siparişiniz alındı! "Siparişlerim" bölümünden takip edebilirsiniz.':'Ваш заказ принят! Отслеживать его можно в разделе «Мои заказы».','Siparişiniz alındı! Sipariş takibi için hesap oluşturabilirsiniz.':'Ваш заказ принят! Создайте аккаунт, чтобы отслеживать заказ.'},
+  ar:{'Sepete eklendi':'تمت الإضافة إلى السلة','Bu ürün stokta yok':'هذا المنتج غير متوفر في المخزون','Siparişiniz alındı! "Siparişlerim" bölümünden takip edebilirsiniz.':'تم استلام طلبك! يمكنك تتبعه من قسم «طلباتي».','Siparişiniz alındı! Sipariş takibi için hesap oluşturabilirsiniz.':'تم استلام طلبك! يمكنك إنشاء حساب لتتبع طلبك.'}
+};
 function toastTranslate(msg, lang){
   // Google'ın sayfa çevirisi kısa ömürlü bildirimleri (toast) yetişemeden çeviremiyor;
-  // bu yüzden mesajı seçili dile burada kendimiz çeviriyoruz. Başarısız olursa Türkçe kalır.
+  // bu yüzden mesajı seçili dile burada kendimiz çeviriyoruz. Başarısız olursa null döner.
   const key = lang + '|' + msg;
   if(TOAST_TR_CACHE[key]) return Promise.resolve(TOAST_TR_CACHE[key]);
-  const ctrl = (typeof AbortController!=='undefined') ? new AbortController() : null;
-  const timer = setTimeout(()=>{ try{ ctrl && ctrl.abort(); }catch(e){} }, 1500);
-  return fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=tr&tl=' + encodeURIComponent(lang) + '&dt=t&q=' + encodeURIComponent(msg), ctrl ? {signal:ctrl.signal} : undefined)
-    .then(r=>r.json())
-    .then(j=>{
-      clearTimeout(timer);
-      const out = (j && j[0]) ? j[0].map(x=>x && x[0] ? x[0] : '').join('') : '';
-      if(out){ TOAST_TR_CACHE[key] = out; return out; }
-      return msg;
-    })
-    .catch(()=>{ clearTimeout(timer); return msg; });
+  const base = String(lang).split('-')[0].toLowerCase();
+  if(TOAST_DICT[base] && TOAST_DICT[base][msg]) return Promise.resolve(TOAST_DICT[base][msg]);
+  const q = encodeURIComponent(msg), tl = encodeURIComponent(lang);
+  const viaGtx = ()=> toastFetchJson('https://translate.googleapis.com/translate_a/single?client=gtx&sl=tr&tl='+tl+'&dt=t&q='+q, 6000)
+    .then(j=> (j && j[0]) ? j[0].map(x=>x && x[0] ? x[0] : '').join('') : '');
+  const viaDict = ()=> toastFetchJson('https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=tr&tl='+tl+'&q='+q, 6000)
+    .then(j=>{ const r = Array.isArray(j) ? j[0] : j; return Array.isArray(r) ? (r[0]||'') : (typeof r==='string' ? r : ''); });
+  return viaGtx().catch(()=>'').then(out=> out ? out : viaDict().catch(()=>''))
+    .then(out=>{ if(out){ TOAST_TR_CACHE[key] = out; return out; } return null; });
 }
-function showToast(msg){
-  // Sadece sayfa GERÇEKTEN çevrilmişse (Google html'e translated-ltr/rtl sınıfı ve googtrans
-  // çerezi yazar) çevir; aksi halde Türkçe kalsın.
+function toastLang(){
+  // Sayfa GERÇEKTEN çevrilmişse hedef dili döndürür; değilse 'tr'.
+  // Çeviri tespiti tek bir işarete bağlı değil: html sınıfı, Google'ın eklediği <font>
+  // sarmalayıcıları, dil kutusunun değeri veya googtrans çerezinden biri yeterli.
   let lang = 'tr';
   try{
-    const translated = /translated-(ltr|rtl)/.test(document.documentElement.className || '');
+    const cls = document.documentElement.className || '';
+    const classTranslated = /translated-(ltr|rtl)/.test(cls);
+    const fontTranslated = !!document.querySelector('#app font[style*="vertical-align"], #app font');
     const m = /(?:^|;\s*)googtrans=([^;]*)/.exec(document.cookie || '');
-    const target = m ? decodeURIComponent(m[1]).split('/').pop() : '';
+    const cookieLang = m ? decodeURIComponent(m[1]).split('/').pop() : '';
     const cb = document.querySelector('select.goog-te-combo');
     const comboVal = cb && cb.value ? cb.value : '';
     const manual = window.fdLangCode && window.fdLangCode !== 'tr' ? window.fdLangCode : '';
-    if(comboVal && comboVal !== 'tr') lang = comboVal;
-    else if(translated) lang = (target && target !== 'tr') ? target : (manual || 'tr');
+    const translated = classTranslated || fontTranslated || (comboVal && comboVal !== 'tr');
+    if(translated){
+      lang = (comboVal && comboVal !== 'tr') ? comboVal
+           : (manual || ((cookieLang && cookieLang !== 'tr') ? cookieLang : 'tr'));
+    }
   }catch(e){}
-  const pop = (text)=>{
+  return lang;
+}
+// Sık görülen bildirimleri önceden çevirip önbelleğe al: bildirim anında gecikmesiz çıksın.
+function warmToastCache(){
+  const lang = toastLang();
+  if(lang === 'tr') return;
+  ['Sepete eklendi', 'Bu ürün stokta yok',
+   'Siparişiniz alındı! "Siparişlerim" bölümünden takip edebilirsiniz.',
+   'Siparişiniz alındı! Sipariş takibi için hesap oluşturabilirsiniz.'
+  ].forEach(m=>toastTranslate(m, lang));
+}
+window.warmToastCache = warmToastCache;
+setTimeout(warmToastCache, 4000);
+function showToast(msg){
+  const lang = toastLang();
+  const pop = (text, ok)=>{
     const t = document.createElement('div');
-    t.className='toast notranslate'; t.setAttribute('translate','no'); t.textContent=text;
+    t.className = 'toast' + (ok ? ' notranslate' : ''); if(ok) t.setAttribute('translate','no');
+    t.textContent = text;
     document.body.appendChild(t);
-    setTimeout(()=>t.remove(), 2400);
+    setTimeout(()=>t.remove(), 2600);
   };
-  if(lang === 'tr') pop(msg);
-  else toastTranslate(msg, lang).then(pop);
+  if(lang === 'tr') pop(msg, false);
+  else toastTranslate(msg, lang).then(out=> out ? pop(out, true) : pop(msg, false));
 }
 
 /* ---------- uygulama içi onay penceresi: tarayıcının native confirm()'i yerine ---------- */
@@ -3668,6 +3704,7 @@ if('serviceWorker' in navigator){
       return;
     }
     translateTo(code);
+    setTimeout(function(){ try{ window.warmToastCache && window.warmToastCache(); }catch(e){} }, 3500);
   };
 
   // Google arayüzü (banner/iframe/üst boşluk) hangi yolla eklenirse eklensin anında temizle
