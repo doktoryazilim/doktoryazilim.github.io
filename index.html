@@ -1463,11 +1463,34 @@ function catColor(id){ return CAT_COLORS[id] || '#eef1f5'; }
 function esc(s){ return (s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 function formatDate(iso){ const d=new Date(iso); return d.toLocaleDateString('tr-TR')+' '+d.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'}); }
 
+const TOAST_TR_CACHE = {};
+function toastTranslate(msg, lang){
+  // Google'ın sayfa çevirisi kısa ömürlü bildirimleri (toast) yetişemeden çeviremiyor;
+  // bu yüzden mesajı seçili dile burada kendimiz çeviriyoruz. Başarısız olursa Türkçe kalır.
+  const key = lang + '|' + msg;
+  if(TOAST_TR_CACHE[key]) return Promise.resolve(TOAST_TR_CACHE[key]);
+  const ctrl = (typeof AbortController!=='undefined') ? new AbortController() : null;
+  const timer = setTimeout(()=>{ try{ ctrl && ctrl.abort(); }catch(e){} }, 1500);
+  return fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=tr&tl=' + encodeURIComponent(lang) + '&dt=t&q=' + encodeURIComponent(msg), ctrl ? {signal:ctrl.signal} : undefined)
+    .then(r=>r.json())
+    .then(j=>{
+      clearTimeout(timer);
+      const out = (j && j[0]) ? j[0].map(x=>x && x[0] ? x[0] : '').join('') : '';
+      if(out){ TOAST_TR_CACHE[key] = out; return out; }
+      return msg;
+    })
+    .catch(()=>{ clearTimeout(timer); return msg; });
+}
 function showToast(msg){
-  const t = document.createElement('div');
-  t.className='toast'; t.textContent=msg;
-  document.body.appendChild(t);
-  setTimeout(()=>t.remove(), 2400);
+  const lang = (window.fdLangCode || 'tr');
+  const pop = (text)=>{
+    const t = document.createElement('div');
+    t.className='toast notranslate'; t.setAttribute('translate','no'); t.textContent=text;
+    document.body.appendChild(t);
+    setTimeout(()=>t.remove(), 2400);
+  };
+  if(lang === 'tr') pop(msg);
+  else toastTranslate(msg, lang).then(pop);
 }
 
 /* ---------- uygulama içi onay penceresi: tarayıcının native confirm()'i yerine ---------- */
