@@ -1482,7 +1482,19 @@ function toastTranslate(msg, lang){
     .catch(()=>{ clearTimeout(timer); return msg; });
 }
 function showToast(msg){
-  const lang = (window.fdLangCode || 'tr');
+  // Sadece sayfa GERÇEKTEN çevrilmişse (Google html'e translated-ltr/rtl sınıfı ve googtrans
+  // çerezi yazar) çevir; aksi halde Türkçe kalsın.
+  let lang = 'tr';
+  try{
+    const translated = /translated-(ltr|rtl)/.test(document.documentElement.className || '');
+    const m = /(?:^|;\s*)googtrans=([^;]*)/.exec(document.cookie || '');
+    const target = m ? decodeURIComponent(m[1]).split('/').pop() : '';
+    const cb = document.querySelector('select.goog-te-combo');
+    const comboVal = cb && cb.value ? cb.value : '';
+    const manual = window.fdLangCode && window.fdLangCode !== 'tr' ? window.fdLangCode : '';
+    if(comboVal && comboVal !== 'tr') lang = comboVal;
+    else if(translated) lang = (target && target !== 'tr') ? target : (manual || 'tr');
+  }catch(e){}
   const pop = (text)=>{
     const t = document.createElement('div');
     t.className='toast notranslate'; t.setAttribute('translate','no'); t.textContent=text;
