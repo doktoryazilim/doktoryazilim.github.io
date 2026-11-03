@@ -2539,7 +2539,16 @@ function placeOrder(){
   }
   CART=[]; saveCart();
   VIEW.cartOpen=false;
-  render();
+  // Sipariş sonrası tüm sayfayı yeniden çizmek ekranın yenileniyormuş gibi
+  // yanıp sönmesine yol açıyordu. Arkadaki sayfada değişen tek şey sepet rozeti
+  // olduğundan (ve hiçbir ürünün stoğu tükenmediyse) sadece sepet penceresini kapatıp
+  // rozeti güncelliyoruz; aksi halde eskisi gibi tam çizim yapılır.
+  if(!justRanOut.length && !ACCOUNT.open && !ADMIN.open && !LIGHTBOX_IMG && !VIEW.product && document.querySelector('.overlay')){
+    document.querySelectorAll('.overlay').forEach(o=>o.remove());
+    updateCartBadge();
+  } else {
+    render();
+  }
   showToast(CUSTOMER ? 'Siparişiniz alındı! "Siparişlerim" bölümünden takip edebilirsiniz.' : 'Siparişiniz alındı! Sipariş takibi için hesap oluşturabilirsiniz.');
 }
 
