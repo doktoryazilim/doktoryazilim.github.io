@@ -2482,45 +2482,18 @@ async function clearCart(){
   CART=[]; saveCart(); render();
 }
 /* ---------- KAPSO WHATSAPP SİPARİŞ BİLDİRİMİ ----------
-   Yeni sipariş geldiğinde yöneticinin WhatsApp'ına mesaj gönderir.
-   AŞAĞIDAKİ 2 DEĞERİ DOLDURUN:
-   - phoneNumberId : Kapso panelinde WhatsApp > Phone numbers altındaki "Phone number ID"
-   - adminPhone    : Bildirimin geleceği numara, ülke koduyla, + ve boşluk olmadan (örn: 905551234567)
-   NOT: Serbest metin mesajı, yalnızca bu numara son 24 saat içinde Kapso numarasına
-   mesaj yazmışsa gider. Aksi halde onaylı bir şablon (template) gerekir; templateName
-   doldurulursa şablon kullanılır. */
-const KAPSO = {
-  apiKey: '941f7cba3cb48d612a12634c3bbe7b18bf338a206ef239d973fae192f42837d2',
-  phoneNumberId: '597907523413541',
-  adminPhone: '905313599315',
-  templateName: '',          // opsiyonel: onaylı şablon adı (gövdede tek {{1}} değişkeni olmalı)
-  templateLang: 'tr',
-  baseUrl: 'https://api.kapso.ai/meta/whatsapp/v24.0'
-};
+   Bildirim Vercel'deki /api/notify fonksiyonu üzerinden gider; API anahtarı sitede durmaz. */
 async function sendKapsoOrderNotification(order){
   try{
-    if(!KAPSO.apiKey || KAPSO.phoneNumberId.indexOf('BURAYA')===0 || KAPSO.adminPhone.indexOf('BURAYA')===0) return;
-    const lines = (order.items||[]).map(i => '• ' + i.name + ' x' + i.qty + ' = ' + (Number(i.price||0)*Number(i.qty||1)).toLocaleString('tr-TR') + ' TL');
-    const text = '🛒 YENİ SİPARİŞ' +
-      '\nMüşteri: ' + (order.customerName || '-') +
-      '\nTelefon: ' + (order.customerPhone || '-') +
-      '\nAdres: ' + (order.customerAddress || '-') +
-      '\n\n' + lines.join('\n') +
-      '\n\nToplam: ' + Number(order.total||0).toLocaleString('tr-TR') + ' TL' +
-      '\nSipariş No: ' + String(order.id).slice(0,8);
-    const body = KAPSO.templateName ? {
-      messaging_product:'whatsapp', to:KAPSO.adminPhone, type:'template',
-      template:{ name:KAPSO.templateName, language:{code:KAPSO.templateLang},
-        components:[{ type:'body', parameters:[{ type:'text', text:text.replace(/\n/g,' | ') }] }] }
-    } : {
-      messaging_product:'whatsapp', recipient_type:'individual', to:KAPSO.adminPhone,
-      type:'text', text:{ body:text }
+    const payload = {
+      id: order.id, total: order.total,
+      customerName: order.customerName, customerPhone: order.customerPhone,
+      customerAddress: order.customerAddress,
+      items: (order.items||[]).map(i=>({ name:i.name, qty:i.qty, price:i.price }))
     };
-    const r = await fetch(KAPSO.baseUrl + '/' + KAPSO.phoneNumberId + '/messages', {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json', 'X-API-Key':KAPSO.apiKey },
-      body:JSON.stringify(body),
-      keepalive:true
+    const r = await fetch('/api/notify', {
+      method:'POST', headers:{ 'Content-Type':'application/json' },
+      body:JSON.stringify(payload), keepalive:true
     });
     if(!r.ok) console.error('Kapso bildirim hatası', r.status, await r.text());
   }catch(e){ console.error('Kapso bildirim hatası', e); }
